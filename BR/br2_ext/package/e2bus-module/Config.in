@@ -1,0 +1,10 @@
+config BR2_PACKAGE_E2BUS_MODULE
+	bool "e2bus-module"
+	depends on BR2_LINUX_KERNEL
+	help
+          my first module
+
+          http://www.nowhere
+
+comment "e2bus-module needs a Linux kernel to be built"
+	depends on !BR2_LINUX_KERNEL

@@ -1,0 +1,9 @@
+config BR2_PACKAGE_E2TEST
+	bool "e2test"
+	select BR2_PACKAGE_ZEROMQ
+	help
+	  E2BUS test application
+
+	  http://github.com/wzab/e2bus
+
+

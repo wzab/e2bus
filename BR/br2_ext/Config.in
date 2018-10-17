@@ -1,0 +1,2 @@
+source "$BR2_EXTERNAL_E2B_MINI_PATH/package/e2bus-module/Config.in"
+source "$BR2_EXTERNAL_E2B_MINI_PATH/package/e2test/Config.in"

@@ -1,0 +1,5 @@
+obj-m := e2bus.o
+CFLAGS_e2bus.o := -std=gnu99 -Wno-declaration-after-statement
+
+
+

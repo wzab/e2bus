@@ -1,0 +1,3 @@
+include ip_art7sb
+vhdl work a7sb_eth_top.vhd
+xdc pins.xdc

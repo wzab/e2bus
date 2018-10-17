@@ -1,0 +1,4 @@
+include ./common.eprj
+include eth100
+include art7sb
+

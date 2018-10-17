@@ -1,0 +1,8 @@
+xci work clk_wiz_0/clk_wiz_0.xci
+xci work clk_wiz_2/clk_wiz_2.xci
+xci work cmd_ack_fifo/cmd_ack_fifo.xci
+xci work cmd_desc_dpr/cmd_desc_dpr.xci
+xci work cmd_frm_dpr/cmd_frm_dpr.xci
+xci work mii_to_rmii_0/mii_to_rmii_0.xci
+xci work resp_ack_dpr/resp_ack_dpr.xci
+xci work resp_dpr/resp_dpr.xci
