@@ -246,7 +246,7 @@ class E2pkt(object):
       raise Exception("Too big number of repetitions")    
     if (delay < 0) or (delay >= (1<<10)):
       raise Exception("Too big delay")    
-    cmd = (4 << 28) | (oper << 21) | ((repeat-1) << 10) | delay
+    cmd = (5 << 28) | (oper << 21) | ((repeat-1) << 10) | delay
     res = [cmd, addr, dta]
     if oper in (CMP_AND_EQU, CMP_OR_EQU):
       #We need mask
