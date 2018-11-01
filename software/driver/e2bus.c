@@ -269,9 +269,10 @@ static void handle_responses(unsigned long sl_as_ul)
 #ifdef E2B_DEBUG
             pr_alert("last packet - entry");
 #endif
-            //Mark packet as completed!
-            cs->status_and_pos = *(uint32_t *) &rs->buf[rs->pos + rs->len - 4];
+			//We remember that data in BUF are LE!
+            cs->status_and_pos = le32_to_cpu(*(uint32_t *) &rs->buf[rs->pos + rs->len - 4]);
             * (uint32_t *)cs->rbuf = cs->resp_len; //Store the length
+            //Mark packet as completed!
             cs->completed = 1;
             //Increase the number of command for which we expect response
             sl->resp_cmd_num += 1;
@@ -473,6 +474,10 @@ static int e2b_proto_rcv(struct sk_buff *skb, struct net_device *dev,
         if(atomic_read(&rs->filled) == 0) {
             //If filled is not set, the buffer should be already freed
             //So we can put our buffer here
+            //!!!
+            //We must remember that rs->buf contains data with LE endianness!
+            //byte swapping may be needed!
+            //!!!
             rs->buf = tmp_buf;
             tmp_buf = NULL; //We don't own it any more
             rs->frnum=resp_fnum;
