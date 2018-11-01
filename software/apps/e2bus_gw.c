@@ -9,7 +9,8 @@ struct sockaddr { int a; }; //for old Knoppix or Buildroot!
 #include <assert.h>
 #include <zmq.h>
 #include <pthread.h>
-#include "e2bus.h"
+#include <endian.h>
+#include "driver/e2bus.h"
 
 
 int fo;
@@ -190,9 +191,6 @@ void * serve_cmds(void * sv)
                     //It shouldn't be, but it is better to make sure!
                     //We get the object from the list
 
-                    //Tu powinienem przeglądac listę od końca, aż dojdę do identyfikatora
-                    //większego od odczytanego, lub do końca listy...
-                    //Jak wygląda zdjęcie z listy?
                     e2b_resp_obj_t * e2resp = resp_tail;
                     if(e2resp == NULL) {
                         break; //No more elements in list (so head should be also NULL, who warrants that?)
@@ -203,9 +201,9 @@ void * serve_cmds(void * sv)
                     }
                     //Here we process the element
                     //Extract the length from the first word
-                    e2resp->resp.rlen = (*(uint32_t *) &e2resp->resp.dta[0]); //Length is in words! Don't multiply it by 4!
+                    e2resp->resp.rlen = le32toh(e2resp->resp.dta[0]); //Length is in bytes!
                     //Extract the status of the response
-                    e2resp->resp.status = *(uint32_t *) &e2resp->resp.dta[e2resp->resp.rlen - 4]; //The offset should be parametrized?
+                    e2resp->resp.status = le32toh(e2resp->resp.dta[e2resp->resp.rlen/4-1]); //The offset should be parametrized?
                     //We transmit the response
                     msize=zmq_send(socket,&e2resp->resp, e2resp->resp.rlen+2*sizeof(uint16_t)+sizeof(uint32_t) ,0);
                     //Now we take it off the list
