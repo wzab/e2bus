@@ -128,8 +128,11 @@ class E2pkt(object):
     self.cur_pkt.cmds += cmds
     cmd_end = len(self.cur_pkt.cmds)
     cmd_rd_start = self.cur_pkt.rlen
-    self.cur_pkt.rlen += rlen
-    cmd_rd_end = self.cur_pkt.rlen
+    cmd_rd_end = self.cur_pkt.rlen + abs(rlen)
+    if rlen > 0:
+        # The negative rlen means, that the commands generates output
+        # Only in case of an error
+        self.cur_pkt.rlen += rlen
     #Now we return reference to the object describing
     #connection of the command with the transmitted packet,
     #command location and response location
