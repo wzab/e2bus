@@ -6,7 +6,7 @@
 -- Author     : FPGA Developer  <xl@wzab.nasz.dom>
 -- Company    : 
 -- Created    : 2018-03-15
--- Last update: 2018-09-23
+-- Last update: 2019-07-02
 -- Platform   : 
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -569,13 +569,17 @@ begin  -- architecture beh_rtl
     signal c1                         : T_C1_COMB                             := C_C1_DEFAULT;
     signal fr_tail, frame_to_transmit : unsigned(C_RESP_SYS_FBITS-1 downto 0) := (others => '0');
 
-
+    -- That time counter will be used to timestamp the responses and to adaptively
+    -- adjust the retransmission time, using the method based on  DOI: 10.1145/800056.802085 
+    signal time_cnt : unsigned(31 downto 0) := (others => '0');
+    
     type T_RESP_NUM is array (0 to C_RESP_SYS_N-1) of unsigned(14 downto 0);
     signal resp_num     : T_RESP_NUM     := (others => (others => '0'));
     type T_RESP_CMD_NUM is array (0 to C_RESP_SYS_N-1) of std_logic_vector(7 downto 0);
     signal resp_cmd_num : T_RESP_CMD_NUM := (others => (others => '0'));
-    type T_RESP_LEN is array (0 to C_RESP_SYS_N-1) of unsigned(15 downto 0);
+    type T_RESP_LEN is array (0 to C_RESP_SYS_N-1) of unsigned(15 downto 0); 
     signal resp_len     : T_RESP_LEN     := (others => (others => '0'));
+    type T_RESP_TIME is array (0 to C_RESP_SYS_N-1) of unsigned(31 downto 0);
     signal resp_busy    : std_logic_vector(C_RESP_SYS_N-1 downto 0);
 
     attribute keep of resp_num           : signal is "true";
@@ -843,6 +847,9 @@ begin  -- architecture beh_rtl
           -- Set the busy flags
           if cex_fr_wr = '1' then
             resp_busy(v_fr_head)    <= '1';
+            resp_time(v_fr_head)    <= time_cnt;
+            resp_time(v_fr_head)(31) <= not time_cnt(31);  -- Negate to ensure
+                                                           -- immediate transmission
             resp_num(v_fr_head)     <= cex_fr_num;
             resp_len(v_fr_head)     <= cex_fr_length;
             resp_cmd_num(v_fr_head) <= cex_cmd_num;
@@ -885,7 +892,14 @@ begin  -- architecture beh_rtl
           end if;
           if not in_transmission then
             -- Check if the frame to transmit is busy
-            if resp_busy(to_integer(frame_to_transmit)) = '1' then
+            if (resp_busy(to_integer(frame_to_transmit)) = '1') and 
+              (time_cnt - resp_time(frame_to_transmit) > retr_threshold)  then
+              -- Here we should also verify, that the sufficient amount
+              -- of time elapsed since the previous transmission of the frame.
+              -- We should also somehow mark the frames that are transmitted
+              -- for the first time (the simplest trick would be to take the
+              -- negated value of the current timestamp?)
+              resp_time(frame_to_transmit) <= time_cnt;
               -- What if the response was fried just above?
               -- Then we may start its transmission.
               -- However, it is not a problem, as the tail wont be moved after
