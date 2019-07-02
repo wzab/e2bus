@@ -7,7 +7,7 @@
 -- License    : Dual LGPL/BSD License
 -- Company    : 
 -- Created    : 2014-11-10
--- Last update: 2018-09-07
+-- Last update: 2019-07-03
 -- Platform   : 
 -- Standard   : VHDL'93
 -------------------------------------------------------------------------------
@@ -61,7 +61,8 @@ entity eth_sender is
     -- Additional info about the transmitted response
     -- Lower 8-bits of frame number
     snd_cmd_frm_num        : in  std_logic_vector(7 downto 0);
-
+    -- Time of sending of the response
+    snd_resp_time         : in std_logic_vector(31 downto 0);
     -- TX Phy interface
     Tx_Clk : in  std_logic;
     Tx_En  : out std_logic;
@@ -78,6 +79,8 @@ architecture beh1 of eth_sender is
 
   type T_ETH_SENDER_STATE is (WST_IDLE, WST_SEND_PREAMB, WST_SEND_SOF,
                               WST_SEND_PACKET_0, WST_SEND_PACKET_0b,
+                              WST_SEND_PACKET_0c, WST_SEND_PACKET_0d,
+                              WST_SEND_PACKET_0e, WST_SEND_PACKET_0f,
                               WST_SEND_PACKET_1, WST_SEND_PACKET_2,
                               WST_SEND_MY_MAC_0, WST_SEND_PEER_MAC_0,
                               WST_SEND_PROTO_0,
@@ -394,8 +397,60 @@ begin  -- beh1
           r_n.state   <= WST_SEND_PACKET_0b;
         end if;
       when WST_SEND_PACKET_0b =>
-        -- we send the marker of the response and then the contents of the response...
+        -- we send the number of the response 
         v_TxD := snd_cmd_frm_num;
+        if r.nibble = '0' then
+          c.TxD   <= v_TxD(3 downto 0);
+          c.Tx_En <= '1';
+        else
+          c.TxD       <= v_TxD(7 downto 4);
+          c.Tx_En     <= '1';
+          r_n.pkt_len <= r.pkt_len + 1;
+          r_n.crc32   <= newcrc32_d8(v_TxD, r.crc32);
+          r_n.state   <= WST_SEND_PACKET_0c;
+        end if;
+      when WST_SEND_PACKET_0c =>
+        -- we send the 1st byte of the response time
+        v_TxD := snd_resp_time(31 downto 24);
+        if r.nibble = '0' then
+          c.TxD   <= v_TxD(3 downto 0);
+          c.Tx_En <= '1';
+        else
+          c.TxD       <= v_TxD(7 downto 4);
+          c.Tx_En     <= '1';
+          r_n.pkt_len <= r.pkt_len + 1;
+          r_n.crc32   <= newcrc32_d8(v_TxD, r.crc32);
+          r_n.state   <= WST_SEND_PACKET_0d;
+        end if;
+      when WST_SEND_PACKET_0d =>
+        -- we send the 2nd byte of the response time
+        v_TxD := snd_resp_time(23 downto 16);
+        if r.nibble = '0' then
+          c.TxD   <= v_TxD(3 downto 0);
+          c.Tx_En <= '1';
+        else
+          c.TxD       <= v_TxD(7 downto 4);
+          c.Tx_En     <= '1';
+          r_n.pkt_len <= r.pkt_len + 1;
+          r_n.crc32   <= newcrc32_d8(v_TxD, r.crc32);
+          r_n.state   <= WST_SEND_PACKET_0e;
+        end if;
+      when WST_SEND_PACKET_0e =>
+        -- we send the 3rd byte of the response time
+        v_TxD := snd_resp_time(15 downto 8);
+        if r.nibble = '0' then
+          c.TxD   <= v_TxD(3 downto 0);
+          c.Tx_En <= '1';
+        else
+          c.TxD       <= v_TxD(7 downto 4);
+          c.Tx_En     <= '1';
+          r_n.pkt_len <= r.pkt_len + 1;
+          r_n.crc32   <= newcrc32_d8(v_TxD, r.crc32);
+          r_n.state   <= WST_SEND_PACKET_0f;
+        end if;
+      when WST_SEND_PACKET_0f =>
+        -- we send the 4th byte of the response time
+        v_TxD := snd_resp_time(7 downto 0);
         if r.nibble = '0' then
           c.TxD   <= v_TxD(3 downto 0);
           c.Tx_En <= '1';
