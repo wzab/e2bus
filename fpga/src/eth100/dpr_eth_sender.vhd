@@ -62,7 +62,7 @@ entity eth_sender is
     -- Lower 8-bits of frame number
     snd_cmd_frm_num        : in  std_logic_vector(7 downto 0);
     -- Time of sending of the response
-    snd_resp_time         : in std_logic_vector(31 downto 0);
+    snd_resp_time         : in std_logic_vector(23 downto 0);
     -- TX Phy interface
     Tx_Clk : in  std_logic;
     Tx_En  : out std_logic;
@@ -80,7 +80,7 @@ architecture beh1 of eth_sender is
   type T_ETH_SENDER_STATE is (WST_IDLE, WST_SEND_PREAMB, WST_SEND_SOF,
                               WST_SEND_PACKET_0, WST_SEND_PACKET_0b,
                               WST_SEND_PACKET_0c, WST_SEND_PACKET_0d,
-                              WST_SEND_PACKET_0e, WST_SEND_PACKET_0f,
+                              WST_SEND_PACKET_0e,
                               WST_SEND_PACKET_1, WST_SEND_PACKET_2,
                               WST_SEND_MY_MAC_0, WST_SEND_PEER_MAC_0,
                               WST_SEND_PROTO_0,
