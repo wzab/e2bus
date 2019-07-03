@@ -43,10 +43,12 @@ static int max_slaves = 4;
 module_param(max_slaves,int,0);
 MODULE_PARM_DESC(max_slaves,"Maximum number of slave FPGA devices serviced by the system.");
 
-static int proto_registered = 0; //Was the protocol registred? Should be deregistered at exit?
+static int proto_registered = 0; //Was the protocol registered? Should be deregistered at exit?
 
 typedef struct {
     uint8_t cmd_fnum;
+    uint8_t time_stamp1; //first byte of the timestamp
+    uint8_t time_stamp2; //second byte of the timestamp
     uint16_t frnum; //number of the frame
     uint8_t * buf; //Pointer to the copy of skb with response data
     int pos; //Start position of the response data
@@ -156,15 +158,23 @@ static void send_packet(unsigned long sl_as_ul)
     for(i=0; i<E2B_NUM_OF_RESP_SLOTS; i++) {
         spin_lock_bh(&sl->resp_slots[i].lock);
         if( sl->resp_slots[i].confirm ) {
-            my_data = skb_put(newskb, 2);
+            my_data = skb_put(newskb, 4);
             *(my_data++) = ((sl->resp_slots[i].frnum >> 8) & 0xff) | 0x80;
             *(my_data++) = sl->resp_slots[i].frnum & 0xff;
-            pkt_len += 2;
+            *(my_data++) = sl->resp_slots[i].time_stamp1;
+            *(my_data++) = sl->resp_slots[i].time_stamp2;
+            pkt_len += 4;
             sl->resp_slots[i].confirm = 0;
             anything_to_send = 1;
         }
         spin_unlock_bh(&sl->resp_slots[i].lock);
     }
+    //@!@ Now we silently assume, that the header part is not longer than
+    //512(?) bytes. So we may put the command list with length up to 1024 bytes
+    //However, maybe it would be good to verify it?
+    //Maybe we could stop sending responses confirmations in case if the resulting
+    //header is too long?
+    //
     // Now if necessary, put the list of the commands
     // But it should be done in a "round robin" way.
     // We remember the last transmitted command in last_cmd_frame (?)
@@ -420,15 +430,19 @@ static int e2b_proto_rcv(struct sk_buff *skb, struct net_device *dev,
     //However here, the Xilinx DPR RAM with width conversion puts the LSB to the first cell.
     //It would require special byte-swapping in the HDL to fix it...
     //First we read the 8-bit CMD frame number
-    //Then we read the 16-bit length, and later 16-bits with the response frame number
+    //Then we read the 16-bit timestamp, that should be opaquely transferred to the
+    //response confirmation (it will be used to adapt retransmission delay)
+    //Next we read the 16-bit length, and later 16-bits with the response frame number
     //(for confirmation) and then with MSB informing if this is the last response.
-    //So we need to get the 5-byte header.
-    if(bc>=pkt_len-5) {
+    //So we need to get the 7-byte header.
+    if(bc>=pkt_len-7) {
         dev_alert(sl->dev,"Wrong structure of the packet. Packet ends in the header");
         return NET_RX_DROP;
     }
     //Now we know, that we can access the header
     uint8_t cmd_fnum = tmp_buf[bc++];
+    uint8_t time_stamp1 = tmp_buf[bc++];
+    uint8_t time_stamp2 = tmp_buf[bc++];
     uint16_t sgm_len = tmp_buf[bc++];
     sgm_len |= (((uint16_t)tmp_buf[bc++]) << 8);
     uint16_t resp_fnum = tmp_buf[bc++];
@@ -457,6 +471,8 @@ static int e2b_proto_rcv(struct sk_buff *skb, struct net_device *dev,
     int cres = comp_mod_2_15(frame_in_slot,resp_fnum);
     if(cres==0) {
         //Frame in the slot is the same, we confirm it
+        sl->resp_slots[slot].time_stamp1 = time_stamp1;
+        sl->resp_slots[slot].time_stamp2 = time_stamp2;
         sl->resp_slots[slot].confirm = 1;
         if(sl->active)
 	    send_pkt = 1;
@@ -485,6 +501,8 @@ static int e2b_proto_rcv(struct sk_buff *skb, struct net_device *dev,
             rs->len=sgm_len*4; //Length is expressed as the number of 32-bit words!
             rs->cmd_fnum=cmd_fnum;
             atomic_set(&rs->filled,1);
+            rs->time_stamp1 = time_stamp1;
+            rs->time_stamp2 = time_stamp2;
             rs->confirm=1; //Response delivered, we can confirm it!
             rs->last=last;
             if(sl->active) {
