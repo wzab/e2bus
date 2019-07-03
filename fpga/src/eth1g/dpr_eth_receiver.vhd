@@ -7,7 +7,7 @@
 -- License    : Dual LGPL/BSD License
 -- Company    : 
 -- Created    : 2014-11-10
--- Last update: 2018-09-06
+-- Last update: 2019-07-03
 -- Platform   : 
 -- Standard   : VHDL'93
 -------------------------------------------------------------------------------
@@ -395,7 +395,7 @@ begin  -- beh1
           r_n.crc32 <= newcrc32_d8(RxD_0, r.crc32);
           if RxD_0(7) = '1' then
             -- This is response acknowledgement
-            r_n.ack_msbyte <= RxD_0;
+            r_n.ack_byte0 <= RxD_0;
             r_n.state      <= ST_RCV_ACK2;
           elsif RxD_0 = x"5b" then
             r_n.state <= ST_RCV_SPECIAL_CMD_1;
@@ -478,6 +478,25 @@ begin  -- beh1
             r_n.state          <= ST_RCV_IDLE;
           end if;
         end if;
+      -- New states used to accumulate ACK data
+      when ST_RCV_ACK0 =>
+        if Rx_Dv_0 = '1' then
+          r_n.crc32         <= newcrc32_d8(RxD_0, r.crc32);
+	  r_n.ack_byte1 <= RxD_0;
+	  r_n.state           <= ST_RCV_ACK1;
+        else
+          -- packet broken?
+          r_n.state <= ST_RCV_IDLE;
+        end if;
+      when ST_RCV_ACK1 =>
+        if Rx_Dv_0 = '1' then
+          r_n.crc32         <= newcrc32_d8(RxD_0, r.crc32);
+	  r_n.ack_byte2 <= RxD_0;
+	  r_n.state           <= ST_RCV_ACK2;
+        else
+          -- packet broken?
+          r_n.state <= ST_RCV_IDLE;
+        end if;
       when ST_RCV_ACK2 =>
         if Rx_Dv_0 = '1' then
           r_n.crc32         <= newcrc32_d8(RxD_0, r.crc32);
@@ -485,7 +504,7 @@ begin  -- beh1
           if v_resp_ack_wr_ptr /= unsigned(resp_ack_rd_ptr) then
             -- There is a place for ACK
             -- Ignore the bit 15 - it is always '1'!
-            c.resp_ack_dpr_dout <= r.ack_msbyte(6 downto 0) & RxD_0;
+            c.resp_ack_dpr_dout <= r.ack_byte0(6 downto 0) & r.ack_byte1 & r.ack_byte2 & RxD_0;
             c.resp_ack_dpr_wr   <= '1';
             c.resp_ack_dpr_ad   <= std_logic_vector(r.resp_ack_wr_ptr);
             r_n.crc32           <= newcrc32_d8(RxD_0, r.crc32);

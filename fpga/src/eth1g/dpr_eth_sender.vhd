@@ -62,7 +62,7 @@ entity eth_sender is
     -- Lower 8-bits of frame number
     snd_cmd_frm_num       : in  std_logic_vector(7 downto 0);
     -- Time of sending of the response
-    snd_resp_time         : in std_logic_vector(23 downto 0);
+    snd_resp_time         : in std_logic_vector(15 downto 0);
     -- TX Phy interface
     Tx_Clk                 : in  std_logic;
     Tx_En                  : out std_logic;
@@ -80,7 +80,6 @@ architecture beh1 of eth_sender is
   type T_ETH_SENDER_STATE is (WST_IDLE, WST_SEND_PREAMB, WST_SEND_SOF,
                               WST_SEND_PACKET_0,WST_SEND_PACKET_0b,
                               WST_SEND_PACKET_0c,WST_SEND_PACKET_0d,
-                              WST_SEND_PACKET_0e,
                               WST_SEND_PACKET_1, WST_SEND_PACKET_2,
                               WST_SEND_MY_MAC_0, WST_SEND_PEER_MAC_0,
                               WST_SEND_PROTO_0,
@@ -366,7 +365,7 @@ begin  -- beh1
         r_n.state   <= WST_SEND_PACKET_0c;
       when WST_SEND_PACKET_0c =>
         -- we send the 1st byte of time of transmission
-        v_TxD       := snd_resp_time(31 downto 24);
+        v_TxD       := snd_resp_time(15 downto 8);
         c.TxD       <= v_TxD;
         c.Tx_En     <= '1';
         r_n.pkt_len <= r.pkt_len + 1;
@@ -374,22 +373,6 @@ begin  -- beh1
         r_n.state   <= WST_SEND_PACKET_0d;
       when WST_SEND_PACKET_0d =>
         -- we send the 2nd byte of time of transmission
-        v_TxD       := snd_resp_time(23 downto 16);
-        c.TxD       <= v_TxD;
-        c.Tx_En     <= '1';
-        r_n.pkt_len <= r.pkt_len + 1;
-        r_n.crc32   <= newcrc32_d8(v_TxD, r.crc32);
-        r_n.state   <= WST_SEND_PACKET_0e;
-      when WST_SEND_PACKET_0e =>
-        -- we send the 3rd byte of time of transmission
-        v_TxD       := snd_resp_time(15 downto 8);
-        c.TxD       <= v_TxD;
-        c.Tx_En     <= '1';
-        r_n.pkt_len <= r.pkt_len + 1;
-        r_n.crc32   <= newcrc32_d8(v_TxD, r.crc32);
-        r_n.state   <= WST_SEND_PACKET_0f;
-      when WST_SEND_PACKET_0f =>
-        -- we send the 4th byte of time of transmission
         v_TxD       := snd_resp_time(7 downto 0);
         c.TxD       <= v_TxD;
         c.Tx_En     <= '1';
