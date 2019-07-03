@@ -7,7 +7,7 @@
 -- License    : Dual LGPL/BSD License
 -- Company    : 
 -- Created    : 2014-11-10
--- Last update: 2018-09-07
+-- Last update: 2019-07-03
 -- Platform   : 
 -- Standard   : VHDL'93
 -------------------------------------------------------------------------------
@@ -89,7 +89,7 @@ architecture beh1 of eth_receiver is
 
   type T_STATE is (ST_RCV_IDLE, ST_RCV_INIT_0, ST_RCV_INIT_1,
                    ST_RCV_PREAMB, ST_RCV_DEST, ST_RCV_SOURCE, ST_RCV_PROTO,
-                   ST_RCV_ACK2, ST_RCV_IGNORE,
+                   ST_RCV_ACK0, ST_RCV_ACK1, ST_RCV_ACK2, ST_RCV_IGNORE,
                    ST_RCV_PACKET_0, ST_RCV_PACKET_1, ST_RCV_PACKET_2,
                    ST_RCV_SPECIAL_CMD_1, ST_RCV_SPECIAL_CMD_2, ST_RCV_SPECIAL_CMD_3, ST_RCV_SPECIAL_CMD_4,
                    ST_RCV_WAIT_IDLE);
@@ -122,7 +122,9 @@ architecture beh1 of eth_receiver is
     cmd_desc_dpr_ad : unsigned(C_CDESC_ABITS-1 downto 0);
     resp_ack_wr_ptr : unsigned(C_RACK_ABITS-1 downto 0);
     resp_ack_start  : unsigned(C_RACK_ABITS-1 downto 0);
-    ack_msbyte      : std_logic_vector(7 downto 0);
+    ack_byte0      : std_logic_vector(7 downto 0);
+    ack_byte1      : std_logic_vector(7 downto 0);
+    ack_byte2      : std_logic_vector(7 downto 0);
     update_flag     : std_logic;
     ready           : std_logic;
     in_pkt          : std_logic;
@@ -144,7 +146,9 @@ architecture beh1 of eth_receiver is
     cmd_desc_dpr_ad => (others => '0'),
     resp_ack_wr_ptr => (others => '0'),
     resp_ack_start  => (others => '0'),
-    ack_msbyte      => (others => '0'),
+    ack_byte0      => (others => '0'),
+    ack_byte1      => (others => '0'),
+    ack_byte2      => (others => '0'),
     update_flag     => '0',
     ready           => '0',
     in_pkt          => '0',
@@ -445,8 +449,8 @@ begin  -- beh1
           r_n.crc32 <= newcrc32_d8(RxD_0, r.crc32);
           if RxD_0(7) = '1' then
             -- This is response acknowledgement
-            r_n.ack_msbyte <= RxD_0;
-            r_n.state      <= ST_RCV_ACK2;
+            r_n.ack_byte0 <= RxD_0;
+            r_n.state      <= ST_RCV_ACK0;
           elsif RxD_0 = x"5b" then
             r_n.state <= ST_RCV_SPECIAL_CMD_1;
           elsif RxD_0 = x"5a" then
@@ -478,7 +482,7 @@ begin  -- beh1
       when ST_RCV_SPECIAL_CMD_1 =>
         if Rx_Dv_0 = '1' then
           r_n.crc32      <= newcrc32_d8(RxD_0, r.crc32);
-          r_n.ack_msbyte <= RxD_0;
+          r_n.ack_byte0 <= RxD_0;
           r_n.state      <= ST_RCV_SPECIAL_CMD_2;
         else
           -- packet broken?
@@ -506,7 +510,7 @@ begin  -- beh1
         -- We request servicing of the special command, and stay in that state
         -- until it is acknowledged (or the whole receiver/transmitter system
         -- is reset).
-        c.special_cmd     <= r.ack_msbyte;
+        c.special_cmd     <= r.ack_byte0;
         c.special_cmd_req <= '1';
         if special_cmd_ack_sync = '1' then
           r_n.state <= ST_RCV_SPECIAL_CMD_4;
@@ -536,6 +540,30 @@ begin  -- beh1
             end if;
           end if;
         end if;
+      when ST_RCV_ACK0 =>
+        if Rx_DV_0 = '1' then
+          r_n.crc32 <= newcrc32_d8(RxD_0, r.crc32);
+	  r_n.ack_byte2 <= RxD_0;
+	  r_n.state           <= ST_RCV_ACK1;          
+        -- If there is no place for ACK, we silently ignore it.
+        else
+          -- packet broken?
+          if full_byte = '1' then
+            r_n.state <= ST_RCV_IDLE;
+          end if;
+        end if;
+      when ST_RCV_ACK1 =>
+        if Rx_DV_0 = '1' then
+          r_n.crc32 <= newcrc32_d8(RxD_0, r.crc32);
+	  r_n.ack_byte2 <= RxD_0;
+	  r_n.state           <= ST_RCV_ACK2;          
+        -- If there is no place for ACK, we silently ignore it.
+        else
+          -- packet broken?
+          if full_byte = '1' then
+            r_n.state <= ST_RCV_IDLE;
+          end if;
+        end if;
       when ST_RCV_ACK2 =>
         if Rx_Dv_0 = '1' then
           r_n.crc32         <= newcrc32_d8(RxD_0, r.crc32);
@@ -543,7 +571,7 @@ begin  -- beh1
           if v_resp_ack_wr_ptr /= unsigned(resp_ack_rd_ptr) then
             -- There is a place for ACK
             -- Ignore the bit 15 - it is always '1'!
-            c.resp_ack_dpr_dout <= r.ack_msbyte(6 downto 0) & RxD_0;
+            c.resp_ack_dpr_dout <= r.ack_byte0(6 downto 0) & r.ack_byte1 & r.ack_byte2 & RxD_0;
             c.resp_ack_dpr_wr   <= '1';
             c.resp_ack_dpr_ad   <= std_logic_vector(r.resp_ack_wr_ptr);
             r_n.crc32           <= newcrc32_d8(RxD_0, r.crc32);
