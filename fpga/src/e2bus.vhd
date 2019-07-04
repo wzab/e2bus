@@ -850,12 +850,14 @@ begin  -- architecture beh_rtl
       variable v_frame_to_confirm : integer;
       variable v_fr_head          : integer;
       variable v_word_adr         : integer;
+      variable v_round_trip       : unsigned(15 downto 0);
     begin  -- process psf1
       if sys_clk'event and sys_clk = '1' then  -- rising clock edge
         if rst_e2b_p = '1' then         -- synchronous reset (active high)
           resp_busy         <= (others => '0');
           resp_num          <= (others => (others => '0'));
           resp_len          <= (others => (others => '0'));
+          resp_time         <= (others => (others => '0'));
           snd_resp_time     <= (others => '0');
           snd_resp_ack_sync <= '0';
           snd_resp_req      <= '0';
@@ -865,6 +867,9 @@ begin  -- architecture beh_rtl
           resp_ack_rd_ptr   <= (others => '0');
           frame_to_transmit <= (others => '0');
         else
+          -- When resp_time was not reset, the strange line below was needed
+          -- to correctly compile the design in ISE for Atlys:
+          -- resp_time <= resp_time;
           if resp_wait > 0 then
             resp_wait <= 0;
           end if;
@@ -881,77 +886,80 @@ begin  -- architecture beh_rtl
             resp_num(v_fr_head)      <= cex_fr_num;
             resp_len(v_fr_head)      <= cex_fr_length;
             resp_cmd_num(v_fr_head)  <= cex_cmd_num;
-          end if;
-          -- Service the RESP confirmations
-          if resp_wait = 0 then
-            -- We must wait until the memory output is stable
-            -- Now we should adjust the retransmission threshold (remember that
-            -- the averaged value is multiplied by 2**C_RTT_AVRG)
-            average_round_trip <= (average_round_trip - shift_right(average_round_trip, C_RTT_AVRG)) +
-                                  unsigned(sys_resp_ack_dout(15 downto 0));
-            if resp_ack_rd_ptr /= resp_ack_wr_ptr then
-              -- There is confirmation to handle
-              v_frame_to_confirm := to_integer(unsigned(sys_resp_ack_dout(C_RESP_SYS_FBITS-1+16 downto 16)));
-              if unsigned(sys_resp_ack_dout(30 downto 16)) = resp_num(v_frame_to_confirm) then
-                -- We check if it is not an outdated delayed ACK
-                resp_busy(v_frame_to_confirm) <= '0';
+          else
+            -- Service the RESP confirmations
+            if resp_wait = 0 then
+              -- We must wait until the memory output is stable
+              -- Now we should adjust the retransmission threshold (remember that
+              -- the averaged value is multiplied by 2**C_RTT_AVRG)
+              average_round_trip <= (average_round_trip - shift_right(average_round_trip, C_RTT_AVRG)) +
+                                    unsigned(sys_resp_ack_dout(15 downto 0));
+              if resp_ack_rd_ptr /= resp_ack_wr_ptr then
+                -- There is confirmation to handle
+                v_frame_to_confirm := to_integer(unsigned(sys_resp_ack_dout(C_RESP_SYS_FBITS-1+16 downto 16)));
+                if unsigned(sys_resp_ack_dout(30 downto 16)) = resp_num(v_frame_to_confirm) then
+                  -- We check if it is not an outdated delayed ACK
+                  resp_busy(v_frame_to_confirm) <= '0';
+                end if;
+                -- Advance the pointer
+                resp_ack_rd_ptr <= std_logic_vector(unsigned(resp_ack_rd_ptr) + 1);
+                -- Set the flag needed to wait until the memory output is stable.
+                resp_wait       <= 1;
               end if;
-              -- Advance the pointer
-              resp_ack_rd_ptr <= std_logic_vector(unsigned(resp_ack_rd_ptr) + 1);
-              -- Set the flag needed to wait until the memory output is stable.
-              resp_wait       <= 1;
             end if;
-          end if;
-          -- We can try to advance the tail pointer
-          -- But where is it stored??? It is our sole responsibility
-          -- To maintain it!
-          -- Writing of responses is done by our "c1" process.
-          if v_fr_head /= to_integer(fr_tail) then
-            -- There is a response that is not confirmed yet
-            if resp_busy(to_integer(fr_tail)) = '0' then
-              -- We may advance the tail pointer, but we must be sure,
-              -- that this frame is not transmitted now!
-              -- Now we do it in a very simple suboptimal way - just checking
-              -- if the frame_to_transmit is equal to fr_tail.
-              -- If yes, then we wait.
-              if frame_to_transmit /= fr_tail then
-                fr_tail <= fr_tail + 1;
-                -- However, when moving the frame slot tail pointer, we should also try to
-                -- move the circular buffer tail pointer.
+            -- We can try to advance the tail pointer
+            -- But where is it stored??? It is our sole responsibility
+            -- To maintain it!
+            -- Writing of responses is done by our "c1" process.
+            if v_fr_head /= to_integer(fr_tail) then
+              -- There is a response that is not confirmed yet
+              if resp_busy(to_integer(fr_tail)) = '0' then
+                -- We may advance the tail pointer, but we must be sure,
+                -- that this frame is not transmitted now!
+                -- Now we do it in a very simple suboptimal way - just checking
+                -- if the frame_to_transmit is equal to fr_tail.
+                -- If yes, then we wait.
+                if frame_to_transmit /= fr_tail then
+                  fr_tail <= fr_tail + 1;
+                  -- However, when moving the frame slot tail pointer, we should also try to
+                  -- move the circular buffer tail pointer.
 
+                end if;
               end if;
             end if;
-          end if;
-          if not in_transmission then
-            -- Check if the frame to transmit is busy
-            if (resp_busy(to_integer(frame_to_transmit)) = '1') and
-              (time_cnt - resp_time(to_integer(frame_to_transmit)) > retr_threshold) then
-              -- Here we should also verify, that the sufficient amount
+            if not in_transmission then
+              -- Check if the frame to transmit is busy and the sufficient amount
               -- of time elapsed since the previous transmission of the frame.
               -- We should also somehow mark the frames that are transmitted
               -- for the first time (the simplest trick would be to take the
               -- negated value of the current timestamp?)
-              -- What if the response was fried just above?
-              -- Then we may start its transmission.
-              -- However, it is not a problem, as the tail wont be moved after
-              -- that response as long, as it is being transmitted...
-              v_word_adr      := 1024*to_integer(frame_to_transmit);
-              snd_resp_start  <= std_logic_vector(to_unsigned(v_word_adr, C_RESP_ABITS));
-              v_word_adr      := v_word_adr + (3+to_integer(resp_len(to_integer(frame_to_transmit))));
-              snd_resp_end    <= std_logic_vector(to_unsigned(v_word_adr, C_RESP_ABITS));
-              snd_cmd_frm_num <= resp_cmd_num(to_integer(frame_to_transmit));
-              snd_resp_time   <= std_logic_vector(time_stamp);
-              snd_resp_req    <= not snd_resp_req;
-              in_transmission <= true;
-            else
+              v_round_trip := time_stamp - resp_time(to_integer(frame_to_transmit));
+              if (resp_busy(to_integer(frame_to_transmit)) = '1') and
+                (v_round_trip > retr_threshold) then
+                -- Here we should also verify, that 
+                -- What if the response was fried just above?
+                -- Then we may start its transmission.
+                -- However, it is not a problem, as the tail wont be moved after
+                -- that response as long, as it is being transmitted...
+                v_word_adr                               := 1024*to_integer(frame_to_transmit);
+                snd_resp_start                           <= std_logic_vector(to_unsigned(v_word_adr, C_RESP_ABITS));
+                v_word_adr                               := v_word_adr + (3+to_integer(resp_len(to_integer(frame_to_transmit))));
+                snd_resp_end                             <= std_logic_vector(to_unsigned(v_word_adr, C_RESP_ABITS));
+                snd_cmd_frm_num                          <= resp_cmd_num(to_integer(frame_to_transmit));
+                snd_resp_time                            <= std_logic_vector(time_stamp);
+                resp_time(to_integer(frame_to_transmit)) <= time_stamp;
+                snd_resp_req                             <= not snd_resp_req;
+                in_transmission                          <= true;
+              else
                                         -- Check the next response
-              frame_to_transmit <= frame_to_transmit + 1;
-            end if;
-          else
+                frame_to_transmit <= frame_to_transmit + 1;
+              end if;
+            else
                                         -- Transmission is in progress
-            if snd_resp_ack_sync = snd_resp_req then
-              in_transmission   <= false;
-              frame_to_transmit <= frame_to_transmit + 1;
+              if snd_resp_ack_sync = snd_resp_req then
+                in_transmission   <= false;
+                frame_to_transmit <= frame_to_transmit + 1;
+              end if;
             end if;
           end if;
         end if;
