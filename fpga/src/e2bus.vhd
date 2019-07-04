@@ -6,7 +6,7 @@
 -- Author     : FPGA Developer  <xl@wzab.nasz.dom>
 -- Company    : 
 -- Created    : 2018-03-15
--- Last update: 2019-07-03
+-- Last update: 2019-07-04
 -- Platform   : 
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -119,12 +119,12 @@ architecture beh_rtl of e2bus is
 
   signal snd_cmd_frm_num : std_logic_vector(7 downto 0) := (others => '0');
 
-  signal time_stamp         : std_logic_vector(15 downto 0) := (others => '0');
-  signal time_cnt           : unsigned(31 downto 0)         := (others => '0');
-  signal average_round_trip : unsigned(31 downto 0)         := (others => '0');
-  constant C_RTT_AVRG       : integer                       := 8;  -- Coefficient defining the averaging
+  signal time_stamp         : unsigned(15 downto 0) := (others => '0');
+  signal time_cnt           : unsigned(31 downto 0) := (others => '0');
+  signal average_round_trip : unsigned(31 downto 0) := (others => '0');
+  constant C_RTT_AVRG       : integer               := 8;  -- Coefficient defining the averaging
   -- of the average_round_trip should be between 3 and 12
-  signal retr_threshold     : unsigned(15 downto 0)         := (3      => '1', others => '0');
+  signal retr_threshold     : unsigned(15 downto 0) := (3      => '1', others => '0');
 
   signal snd_resp_ack_sync : std_logic := '0';
 
@@ -181,13 +181,13 @@ architecture beh_rtl of e2bus is
       clka  : in  std_logic;
       wea   : in  std_logic_vector(0 downto 0);
       addra : in  std_logic_vector(6 downto 0);
-      dina  : in  std_logic_vector(14 downto 0);
-      douta : out std_logic_vector(14 downto 0);
+      dina  : in  std_logic_vector(30 downto 0);
+      douta : out std_logic_vector(30 downto 0);
       clkb  : in  std_logic;
       web   : in  std_logic_vector(0 downto 0);
       addrb : in  std_logic_vector(6 downto 0);
-      dinb  : in  std_logic_vector(14 downto 0);
-      doutb : out std_logic_vector(14 downto 0)
+      dinb  : in  std_logic_vector(30 downto 0);
+      doutb : out std_logic_vector(30 downto 0)
       );
   end component;
 
@@ -243,10 +243,10 @@ begin  -- architecture beh_rtl
   rst_p <= not rst_n;
 
   -- Selection of time scale for limiting the retransmission rate (16 bits)
-  time_stamp <= std_logic_vector(time_cnt(17 downto 2));
+  time_stamp <= time_cnt(17 downto 2);
 
   retr_threshold <= average_round_trip(C_RTT_AVRG+14 downto C_RTT_AVRG-1);
-  
+
   -- Counter for time stamps (may be partially optimized out)
   tcnt : process (sys_clk) is
   begin  -- process tcnt
@@ -606,6 +606,7 @@ begin  -- architecture beh_rtl
     type T_RESP_LEN is array (0 to C_RESP_SYS_N-1) of unsigned(15 downto 0);
     signal resp_len     : T_RESP_LEN     := (others => (others => '0'));
     type T_RESP_TIME is array (0 to C_RESP_SYS_N-1) of unsigned(15 downto 0);
+    signal resp_time    : T_RESP_TIME    := (others => (others => '0'));
     signal resp_busy    : std_logic_vector(C_RESP_SYS_N-1 downto 0);
 
     attribute keep of resp_num           : signal is "true";
@@ -850,11 +851,12 @@ begin  -- architecture beh_rtl
       variable v_fr_head          : integer;
       variable v_word_adr         : integer;
     begin  -- process psf1
-      if sys_clk'event and sys_clk = '1' then              -- rising clock edge
+      if sys_clk'event and sys_clk = '1' then  -- rising clock edge
         if rst_e2b_p = '1' then         -- synchronous reset (active high)
           resp_busy         <= (others => '0');
           resp_num          <= (others => (others => '0'));
           resp_len          <= (others => (others => '0'));
+          snd_resp_time     <= (others => '0');
           snd_resp_ack_sync <= '0';
           snd_resp_req      <= '0';
           resp_wait         <= 0;
@@ -873,8 +875,8 @@ begin  -- architecture beh_rtl
           -- Set the busy flags
           if cex_fr_wr = '1' then
             resp_busy(v_fr_head)     <= '1';
-            resp_time(v_fr_head)     <= time_cnt;
-            resp_time(v_fr_head)(31) <= not time_cnt(31);  -- Negate to ensure
+            resp_time(v_fr_head)     <= time_stamp;
+            resp_time(v_fr_head)(15) <= not time_stamp(15);  -- Negate to ensure
                                         -- immediate transmission
             resp_num(v_fr_head)      <= cex_fr_num;
             resp_len(v_fr_head)      <= cex_fr_length;
@@ -885,12 +887,12 @@ begin  -- architecture beh_rtl
             -- We must wait until the memory output is stable
             -- Now we should adjust the retransmission threshold (remember that
             -- the averaged value is multiplied by 2**C_RTT_AVRG)
-            average_round_trip <= (average_round_trip - shift_right(average_round_trip,C_RTT_AVRG)) +
-                                  unsigned(sys_resp_ack_dout(15 downto 0);
+            average_round_trip <= (average_round_trip - shift_right(average_round_trip, C_RTT_AVRG)) +
+                                  unsigned(sys_resp_ack_dout(15 downto 0));
             if resp_ack_rd_ptr /= resp_ack_wr_ptr then
               -- There is confirmation to handle
               v_frame_to_confirm := to_integer(unsigned(sys_resp_ack_dout(C_RESP_SYS_FBITS-1+16 downto 16)));
-              if unsigned(sys_resp_ack_dout(31 downto 16)) = resp_num(v_frame_to_confirm) then
+              if unsigned(sys_resp_ack_dout(30 downto 16)) = resp_num(v_frame_to_confirm) then
                 -- We check if it is not an outdated delayed ACK
                 resp_busy(v_frame_to_confirm) <= '0';
               end if;
@@ -923,7 +925,7 @@ begin  -- architecture beh_rtl
           if not in_transmission then
             -- Check if the frame to transmit is busy
             if (resp_busy(to_integer(frame_to_transmit)) = '1') and
-              (time_cnt - resp_time(frame_to_transmit) > retr_threshold) then
+              (time_cnt - resp_time(to_integer(frame_to_transmit)) > retr_threshold) then
               -- Here we should also verify, that the sufficient amount
               -- of time elapsed since the previous transmission of the frame.
               -- We should also somehow mark the frames that are transmitted
@@ -938,7 +940,7 @@ begin  -- architecture beh_rtl
               v_word_adr      := v_word_adr + (3+to_integer(resp_len(to_integer(frame_to_transmit))));
               snd_resp_end    <= std_logic_vector(to_unsigned(v_word_adr, C_RESP_ABITS));
               snd_cmd_frm_num <= resp_cmd_num(to_integer(frame_to_transmit));
-              snd_resp_time   <= time_stamp;
+              snd_resp_time   <= std_logic_vector(time_stamp);
               snd_resp_req    <= not snd_resp_req;
               in_transmission <= true;
             else

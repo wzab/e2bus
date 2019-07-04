@@ -7,7 +7,7 @@
 -- License    : Dual LGPL/BSD License
 -- Company    : 
 -- Created    : 2014-11-10
--- Last update: 2019-07-03
+-- Last update: 2019-07-04
 -- Platform   : 
 -- Standard   : VHDL'93
 -------------------------------------------------------------------------------
@@ -215,9 +215,11 @@ begin  -- beh1
     end if;
   end process snd1;  -- snd1
 
-  snd2 : process (irqs, my_mac, peer_mac, r, snd_cmd_ack_fifo_din, snd_cmd_ack_fifo_empty,
-                  snd_resp_dpr_din, snd_resp_end, snd_resp_req_sync,
-                  snd_resp_start)
+  snd2 : process (irqs, is_irq_to_service, my_mac, peer_mac, r,
+                  snd_cmd_ack_fifo_din, snd_cmd_ack_fifo_empty,
+                  snd_cmd_frm_num, snd_resp_dpr_din, snd_resp_end,
+                  snd_resp_req_sync, snd_resp_start,
+                  snd_resp_time)
     variable v_TxD : std_logic_vector(7 downto 0);
   begin  -- process snd1
     -- default values
