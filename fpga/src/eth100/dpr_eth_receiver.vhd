@@ -7,7 +7,7 @@
 -- License    : Dual LGPL/BSD License
 -- Company    : 
 -- Created    : 2014-11-10
--- Last update: 2019-07-03
+-- Last update: 2019-07-04
 -- Platform   : 
 -- Standard   : VHDL'93
 -------------------------------------------------------------------------------
@@ -122,9 +122,10 @@ architecture beh1 of eth_receiver is
     cmd_desc_dpr_ad : unsigned(C_CDESC_ABITS-1 downto 0);
     resp_ack_wr_ptr : unsigned(C_RACK_ABITS-1 downto 0);
     resp_ack_start  : unsigned(C_RACK_ABITS-1 downto 0);
-    ack_byte0      : std_logic_vector(7 downto 0);
-    ack_byte1      : std_logic_vector(7 downto 0);
-    ack_byte2      : std_logic_vector(7 downto 0);
+    ack_byte0       : std_logic_vector(7 downto 0);
+    ack_byte1       : std_logic_vector(7 downto 0);
+    ack_byte2       : std_logic_vector(7 downto 0);
+    frnum_is_bigger : std_logic;
     update_flag     : std_logic;
     ready           : std_logic;
     in_pkt          : std_logic;
@@ -146,9 +147,10 @@ architecture beh1 of eth_receiver is
     cmd_desc_dpr_ad => (others => '0'),
     resp_ack_wr_ptr => (others => '0'),
     resp_ack_start  => (others => '0'),
-    ack_byte0      => (others => '0'),
-    ack_byte1      => (others => '0'),
-    ack_byte2      => (others => '0'),
+    ack_byte0       => (others => '0'),
+    ack_byte1       => (others => '0'),
+    ack_byte2       => (others => '0'),
+    frnum_is_bigger => '0',
     update_flag     => '0',
     ready           => '0',
     in_pkt          => '0',
@@ -169,8 +171,8 @@ architecture beh1 of eth_receiver is
   attribute keep of dbg_crc32       : signal is "true";
   attribute mark_debug of dbg_crc32 : signal is "true";
 
- 
-  
+
+
 
   type T_RCV_COMB is record
     special_cmd     : std_logic_vector(7 downto 0);
@@ -235,7 +237,7 @@ begin  -- beh1
 
   dbg_state <= r.state;
   dbg_crc32 <= r.crc32;
-  
+
   received_peer_mac <= r.mac_addr;
   special_cmd       <= c.special_cmd;
   special_cmd_req   <= c.special_cmd_req;
@@ -450,7 +452,7 @@ begin  -- beh1
           if RxD_0(7) = '1' then
             -- This is response acknowledgement
             r_n.ack_byte0 <= RxD_0;
-            r_n.state      <= ST_RCV_ACK0;
+            r_n.state     <= ST_RCV_ACK0;
           elsif RxD_0 = x"5b" then
             r_n.state <= ST_RCV_SPECIAL_CMD_1;
           elsif RxD_0 = x"5a" then
@@ -481,9 +483,9 @@ begin  -- beh1
         end if;
       when ST_RCV_SPECIAL_CMD_1 =>
         if Rx_Dv_0 = '1' then
-          r_n.crc32      <= newcrc32_d8(RxD_0, r.crc32);
+          r_n.crc32     <= newcrc32_d8(RxD_0, r.crc32);
           r_n.ack_byte0 <= RxD_0;
-          r_n.state      <= ST_RCV_SPECIAL_CMD_2;
+          r_n.state     <= ST_RCV_SPECIAL_CMD_2;
         else
           -- packet broken?
           if full_byte = '1' then
@@ -542,9 +544,9 @@ begin  -- beh1
         end if;
       when ST_RCV_ACK0 =>
         if Rx_DV_0 = '1' then
-          r_n.crc32 <= newcrc32_d8(RxD_0, r.crc32);
-	  r_n.ack_byte2 <= RxD_0;
-	  r_n.state           <= ST_RCV_ACK1;          
+          r_n.crc32     <= newcrc32_d8(RxD_0, r.crc32);
+          r_n.ack_byte2 <= RxD_0;
+          r_n.state     <= ST_RCV_ACK1;
         -- If there is no place for ACK, we silently ignore it.
         else
           -- packet broken?
@@ -554,9 +556,9 @@ begin  -- beh1
         end if;
       when ST_RCV_ACK1 =>
         if Rx_DV_0 = '1' then
-          r_n.crc32 <= newcrc32_d8(RxD_0, r.crc32);
-	  r_n.ack_byte2 <= RxD_0;
-	  r_n.state           <= ST_RCV_ACK2;          
+          r_n.crc32     <= newcrc32_d8(RxD_0, r.crc32);
+          r_n.ack_byte2 <= RxD_0;
+          r_n.state     <= ST_RCV_ACK2;
         -- If there is no place for ACK, we silently ignore it.
         else
           -- packet broken?
@@ -608,6 +610,13 @@ begin  -- beh1
             -- No place for data, drop the packet
             r_n.state <= ST_RCV_WAIT_IDLE;
           end if;
+          -- We precompute the comp_frame_nums, to shorten the critical path
+          -- Only the last result, calculated before Rx_Dv_0 goes down is valid.
+          -- We use in in the else clause below.
+          -- Please note, that the r.cmd_frame_num is updated only in the first
+          -- two cycles. That's why we can safely use that approach.
+          v_comp_frame_nums   := unsigned(stlv2cdesc_frm_num(cmd_desc_dpr_din)) - unsigned(r.cmd_frame_num);
+          r_n.frnum_is_bigger <= v_comp_frame_nums(15);
         else
           if full_byte = '1' then
             -- Rx_Dv = 0!
@@ -626,8 +635,7 @@ begin  -- beh1
               -- to address the DESC DPR in the previous cycle!
               -- Now we compare it with the number of the last processed
               -- command frame.
-              v_comp_frame_nums  := unsigned(stlv2cdesc_frm_num(cmd_desc_dpr_din)) - unsigned(r.cmd_frame_num);
-              if v_comp_frame_nums(14) = '1' then
+              if r.frnum_is_bigger = '1' then
                 -- We compare modulo 2^15. That's why the sign is expected to
                 -- be on the 14-th bit.
                 -- The number of the frame stored in the slot is lower than the number of

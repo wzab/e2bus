@@ -7,7 +7,7 @@
 -- License    : Dual LGPL/BSD License
 -- Company    : 
 -- Created    : 2014-11-10
--- Last update: 2019-07-03
+-- Last update: 2019-07-04
 -- Platform   : 
 -- Standard   : VHDL'93
 -------------------------------------------------------------------------------
@@ -122,6 +122,7 @@ architecture beh1 of eth_receiver is
     ack_byte0       : std_logic_vector(7 downto 0);
     ack_byte1       : std_logic_vector(7 downto 0);
     ack_byte2       : std_logic_vector(7 downto 0);
+    frnum_is_bigger : std_logic;
     update_flag     : std_logic;
     ready           : std_logic;
     count           : integer range 0 to 256;
@@ -145,6 +146,7 @@ architecture beh1 of eth_receiver is
     ack_byte0       => (others => '0'),
     ack_byte1       => (others => '0'),
     ack_byte2       => (others => '0'),
+    frnum_is_bigger => '0',
     update_flag     => '0',
     ready           => '0',
     count           => 0,
@@ -429,9 +431,9 @@ begin  -- beh1
         end if;
       when ST_RCV_SPECIAL_CMD_1 =>
         if Rx_Dv_0 = '1' then
-          r_n.crc32      <= newcrc32_d8(RxD_0, r.crc32);
+          r_n.crc32     <= newcrc32_d8(RxD_0, r.crc32);
           r_n.ack_byte0 <= RxD_0;
-          r_n.state      <= ST_RCV_SPECIAL_CMD_2;
+          r_n.state     <= ST_RCV_SPECIAL_CMD_2;
         else
           -- packet broken?
           r_n.state <= ST_RCV_IDLE;
@@ -543,6 +545,13 @@ begin  -- beh1
             -- No place for data, drop the packet
             r_n.state <= ST_RCV_WAIT_IDLE;
           end if;
+          -- We precompute the v_comp_frame_nums, to shorten the critical path
+          -- Only the last result, calculated before Rx_Dv_0 goes down is valid.
+          -- We use in in the else clause below.
+          -- Please note, that the r.cmd_frame_num is updated only in the first
+          -- two cycles. That's why we can safely use that approach.
+          v_comp_frame_nums   := unsigned(stlv2cdesc_frm_num(cmd_desc_dpr_din)) - unsigned(r.cmd_frame_num);
+          r_n.frnum_is_bigger <= v_comp_frame_nums(15);
         else
           -- Rx_Dv = 0!
           -- Packet broken, or completed?
@@ -560,8 +569,7 @@ begin  -- beh1
             -- to address the DESC DPR in the previous cycle!
             -- Now we compare it with the number of the last processed
             -- command frame.
-            v_comp_frame_nums  := unsigned(stlv2cdesc_frm_num(cmd_desc_dpr_din)) - unsigned(r.cmd_frame_num);
-            if v_comp_frame_nums(15) = '1' then
+            if r.frnum_is_bigger = '1' then
               -- The number of the frame stored in the slot is lower than the number of
               -- arrived frame. 
               -- Update the start of the next packet
