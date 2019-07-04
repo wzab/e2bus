@@ -545,7 +545,7 @@ begin  -- beh1
       when ST_RCV_ACK0 =>
         if Rx_DV_0 = '1' then
           r_n.crc32     <= newcrc32_d8(RxD_0, r.crc32);
-          r_n.ack_byte2 <= RxD_0;
+          r_n.ack_byte1 <= RxD_0;
           r_n.state     <= ST_RCV_ACK1;
         -- If there is no place for ACK, we silently ignore it.
         else
