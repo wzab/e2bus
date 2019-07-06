@@ -7,7 +7,7 @@
 -- License    : BSD License
 -- Company    : 
 -- Created    : 2010-08-03
--- Last update: 2018-09-23
+-- Last update: 2019-07-04
 -- Platform   : 
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -29,10 +29,10 @@ use ieee.numeric_std.all;
 library work;
 
 entity atlys_eth is
-  
+
   port (
-    cpu_reset : in std_logic;
-    btn        : in    std_logic_vector(3 downto 0);
+    cpu_reset      : in    std_logic;
+    btn            : in    std_logic_vector(3 downto 0);
     switches       : in    std_logic_vector(7 downto 0);
     gpio_led       : out   std_logic_vector(7 downto 0);
     -- PHY interface
@@ -86,31 +86,31 @@ architecture beh of atlys_eth is
   end component;
 
 
- 
-  signal my_mac          : std_logic_vector(47 downto 0);
-  signal peer_mac          : std_logic_vector(47 downto 0) :=
+
+  signal my_mac   : std_logic_vector(47 downto 0);
+  signal peer_mac : std_logic_vector(47 downto 0) :=
     -- x"14_fe_b5_c5_bc_7c";
     -- x"d8_cb_8a_1d_ab_e5";
     -- x"de_ad_be_af_be_e6";
-	 x"52_55_22_d1_55_01";
-	 
-  signal restart         : std_logic;
+    x"52_55_22_d1_55_01";
+
+  signal restart : std_logic;
 
   signal nwr, nrd, rst_n, dcm_locked : std_logic;
-  signal not_cpu_reset, rst_del             : std_logic;
+  signal not_cpu_reset, rst_del      : std_logic;
 
-  signal tx_valid : std_logic := '0';
-  signal tx_last : std_logic := '0';
-  signal tx_error : std_logic := '0';
-  signal tx_ready : std_logic := '0';
-  signal tx_data : std_logic_vector(7 downto 0) := (others => '0');
+  signal tx_valid : std_logic                    := '0';
+  signal tx_last  : std_logic                    := '0';
+  signal tx_error : std_logic                    := '0';
+  signal tx_ready : std_logic                    := '0';
+  signal tx_data  : std_logic_vector(7 downto 0) := (others => '0');
 
-  
-  signal rx_error : std_logic := '0';
-  signal rx_valid : std_logic := '0';
-  signal rx_last : std_logic := '0';
-  signal rx_data : std_logic_vector(7 downto 0) := (others => '0');
-  
+
+  signal rx_error : std_logic                    := '0';
+  signal rx_valid : std_logic                    := '0';
+  signal rx_last  : std_logic                    := '0';
+  signal rx_data  : std_logic_vector(7 downto 0) := (others => '0');
+
   signal irqs : std_logic_vector(7 downto 0) := (others => '0');
 
 
@@ -118,12 +118,17 @@ architecture beh of atlys_eth is
 
   -- signal tx_counter         : integer                       := 10000;
   -- signal Reset              : std_logic;
-  signal Clk_125M           : std_logic;
-  signal Clk_user           : std_logic;
-  signal Clk_reg            : std_logic;
-  signal Rx_clk             : std_logic;
-  signal Tx_clk             : std_logic;
-  
+  signal Clk_125M : std_logic;
+  signal Clk_user : std_logic;
+  signal Clk_reg  : std_logic;
+  signal Rx_clk   : std_logic;
+  signal Tx_clk   : std_logic;
+
+  signal phy_rxctl_rxdv_d : std_logic;
+  signal phy_rxd_d        : std_logic_vector(7 downto 0);
+  signal phy_rxer_d       : std_logic;
+
+
 begin  -- beh
 
   -- Allow selection of MAC with the DIP switch to allow testing
@@ -143,25 +148,25 @@ begin  -- beh
   tx_clk <= Clk_125M;
   rx_clk <= phy_rxclk;
 
-  e2bus_1: entity work.e2bus
+  e2bus_1 : entity work.e2bus
     generic map (
-      PHY_DTA_WIDTH  => 8
+      PHY_DTA_WIDTH => 8
       )
     port map (
-      irqs => irqs,
-      leds => gpio_led,
-      my_mac => my_mac,
+      irqs    => irqs,
+      leds    => gpio_led,
+      my_mac  => my_mac,
       sys_clk => clk_user,
-      rst_n => rst_n,
+      rst_n   => rst_n,
       --
-      Rx_Clk => phy_rxclk,
-      Rx_Er  => phy_rxer,
-      Rx_Dv  => phy_rxctl_rxdv,
-      RxD    => phy_rxd,
-      Tx_Clk => tx_clk,
-      Tx_En  => phy_txctl_txen,
-      TxD    => phy_txd);
-  
+      Rx_Clk  => phy_rxclk,
+      Rx_Er   => phy_rxer_d,
+      Rx_Dv   => phy_rxctl_rxdv_d,
+      RxD     => phy_rxd_d,
+      Tx_Clk  => tx_clk,
+      Tx_En   => phy_txctl_txen,
+      TxD     => phy_txd);
+
   dcm1_1 : dcm1
     port map (
       CLK_IN1  => sysclk,
@@ -170,6 +175,16 @@ begin  -- beh
       CLK_OUT3 => Clk_reg,
       RESET    => not_cpu_reset,
       LOCKED   => dcm_locked);
+
+  -- Delay RX signals to improve timing
+  process(phy_rxclk)
+  begin
+    if rising_edge(phy_rxclk) then
+      phy_rxer_d       <= phy_rxer;
+      phy_rxctl_rxdv_d <= phy_rxctl_rxdv;
+      phy_rxd_d        <= phy_rxd;
+    end if;
+  end process;
 
   process (Clk_user, not_cpu_reset)
   begin  -- process
@@ -199,7 +214,7 @@ begin  -- beh
 
   phy_txer <= '0';
   phy_mdio <= 'Z';
-  phy_mdc <= '0';
+  phy_mdc  <= '0';
 
   phy_txc_gtxclk <= tx_clk;
 

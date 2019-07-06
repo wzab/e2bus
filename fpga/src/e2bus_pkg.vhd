@@ -31,9 +31,9 @@ package e2bus_pkg is
   
   constant C_CACK_DBITS : integer := 16;  -- We just send the full command frame number
   constant C_RACK_ABITS : integer := 7;  -- We just send the full response frame number
-  constant C_RACK_DBITS : integer := 15;  -- We just send the full response frame
-                                          -- number only 15 bits (bit 15 is
-                                          -- always 1)
+  constant C_RACK_DBITS : integer := 31;  -- We send the 15 bits of the full response frame
+                                          -- (bit 15 is always 1), and then 16
+                                          -- bits of timestamp
 
   constant C_RESP_ABITS : integer := 12;
   -- We assume, that each response is up to 1024 bytes (256 words) long.

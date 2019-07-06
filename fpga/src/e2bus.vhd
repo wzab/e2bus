@@ -6,7 +6,7 @@
 -- Author     : FPGA Developer  <xl@wzab.nasz.dom>
 -- Company    : 
 -- Created    : 2018-03-15
--- Last update: 2018-09-23
+-- Last update: 2019-07-04
 -- Platform   : 
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -27,7 +27,7 @@ use work.e2bus_pkg.all;
 entity e2bus is
 
   generic (
-    PHY_DTA_WIDTH  : integer := 8
+    PHY_DTA_WIDTH : integer := 8
     );
 
   port (
@@ -113,10 +113,18 @@ architecture beh_rtl of e2bus is
   signal snd_resp_dpr_ad   : std_logic_vector(C_RESP_ABITS-1 downto 0) := (others => '0');
   signal snd_resp_start    : std_logic_vector(C_RESP_ABITS-1 downto 0) := (others => '0');
   signal snd_resp_end      : std_logic_vector(C_RESP_ABITS-1 downto 0) := (others => '0');
+  signal snd_resp_time     : std_logic_vector(15 downto 0)             := (others => '0');
   signal snd_resp_req      : std_logic                                 := '0';
   signal snd_resp_ack      : std_logic                                 := '0';
 
   signal snd_cmd_frm_num : std_logic_vector(7 downto 0) := (others => '0');
+
+  signal time_stamp         : unsigned(15 downto 0) := (others => '0');
+  signal time_cnt           : unsigned(31 downto 0) := (others => '0');
+  signal average_round_trip : unsigned(31 downto 0) := (others => '0');
+  constant C_RTT_AVRG       : integer               := 8;  -- Coefficient defining the averaging
+  -- of the average_round_trip should be between 3 and 12
+  signal retr_threshold     : unsigned(15 downto 0) := (3      => '1', others => '0');
 
   signal snd_resp_ack_sync : std_logic := '0';
 
@@ -173,13 +181,13 @@ architecture beh_rtl of e2bus is
       clka  : in  std_logic;
       wea   : in  std_logic_vector(0 downto 0);
       addra : in  std_logic_vector(6 downto 0);
-      dina  : in  std_logic_vector(14 downto 0);
-      douta : out std_logic_vector(14 downto 0);
+      dina  : in  std_logic_vector(30 downto 0);
+      douta : out std_logic_vector(30 downto 0);
       clkb  : in  std_logic;
       web   : in  std_logic_vector(0 downto 0);
       addrb : in  std_logic_vector(6 downto 0);
-      dinb  : in  std_logic_vector(14 downto 0);
-      doutb : out std_logic_vector(14 downto 0)
+      dinb  : in  std_logic_vector(30 downto 0);
+      doutb : out std_logic_vector(30 downto 0)
       );
   end component;
 
@@ -233,6 +241,23 @@ architecture beh_rtl of e2bus is
 begin  -- architecture beh_rtl
 
   rst_p <= not rst_n;
+
+  -- Selection of time scale for limiting the retransmission rate (16 bits)
+  time_stamp <= time_cnt(17 downto 2);
+
+  retr_threshold <= average_round_trip(C_RTT_AVRG+14 downto C_RTT_AVRG-1);
+
+  -- Counter for time stamps (may be partially optimized out)
+  tcnt : process (sys_clk) is
+  begin  -- process tcnt
+    if sys_clk'event and sys_clk = '1' then  -- rising clock edge
+      if rst_p = '1' then                    -- synchronous reset (active high)
+        time_cnt <= (others => '0');
+      else
+        time_cnt <= time_cnt + 1;
+      end if;
+    end if;
+  end process tcnt;
 
   eth_receiver_1 : entity work.eth_receiver
     port map (
@@ -303,6 +328,7 @@ begin  -- architecture beh_rtl
       snd_resp_req           => snd_resp_req,
       snd_resp_ack           => snd_resp_ack,
       snd_cmd_frm_num        => snd_cmd_frm_num,
+      snd_resp_time          => snd_resp_time,
       -- MAC Interface
       Tx_Clk                 => Tx_Clk,
       Tx_En                  => Tx_En,
@@ -569,6 +595,9 @@ begin  -- architecture beh_rtl
     signal c1                         : T_C1_COMB                             := C_C1_DEFAULT;
     signal fr_tail, frame_to_transmit : unsigned(C_RESP_SYS_FBITS-1 downto 0) := (others => '0');
 
+    -- That time counter will be used to timestamp the responses and to adaptively
+    -- adjust the retransmission time, using the method based on  DOI: 10.1145/800056.802085 
+    signal time_cnt : unsigned(31 downto 0) := (others => '0');
 
     type T_RESP_NUM is array (0 to C_RESP_SYS_N-1) of unsigned(14 downto 0);
     signal resp_num     : T_RESP_NUM     := (others => (others => '0'));
@@ -576,6 +605,8 @@ begin  -- architecture beh_rtl
     signal resp_cmd_num : T_RESP_CMD_NUM := (others => (others => '0'));
     type T_RESP_LEN is array (0 to C_RESP_SYS_N-1) of unsigned(15 downto 0);
     signal resp_len     : T_RESP_LEN     := (others => (others => '0'));
+    type T_RESP_TIME is array (0 to C_RESP_SYS_N-1) of unsigned(15 downto 0);
+    signal resp_time    : T_RESP_TIME    := (others => (others => '0'));
     signal resp_busy    : std_logic_vector(C_RESP_SYS_N-1 downto 0);
 
     attribute keep of resp_num           : signal is "true";
@@ -781,7 +812,7 @@ begin  -- architecture beh_rtl
           r1_n.cmd_frame_rd_ptr <= v_sys_cmd_frame_ad;
           -- r1_n.cmd_frame_rd_ptr <= stlv2cdesc_pend(sys_desc_dout);
           -- We still need access to the CMD FRAME DPR
-          c1.request_cmd_frame <= '1';       -- To access the cmd_frame DPR
+          c1.request_cmd_frame  <= '1';      -- To access the cmd_frame DPR
           -- Now we can read the descriptor
           --v_sys_cmd_frame_ad    := stlv2cdesc_pend(sys_desc_dout);
           c1.sys_cmd_frame_ad   <= v_sys_cmd_frame_ad(v_sys_cmd_frame_ad'left downto 2);
@@ -819,12 +850,15 @@ begin  -- architecture beh_rtl
       variable v_frame_to_confirm : integer;
       variable v_fr_head          : integer;
       variable v_word_adr         : integer;
+      variable v_round_trip       : unsigned(15 downto 0);
     begin  -- process psf1
       if sys_clk'event and sys_clk = '1' then  -- rising clock edge
         if rst_e2b_p = '1' then         -- synchronous reset (active high)
           resp_busy         <= (others => '0');
           resp_num          <= (others => (others => '0'));
           resp_len          <= (others => (others => '0'));
+          resp_time         <= (others => (others => '0'));
+          snd_resp_time     <= (others => '0');
           snd_resp_ack_sync <= '0';
           snd_resp_req      <= '0';
           resp_wait         <= 0;
@@ -833,6 +867,9 @@ begin  -- architecture beh_rtl
           resp_ack_rd_ptr   <= (others => '0');
           frame_to_transmit <= (others => '0');
         else
+          -- When resp_time was not reset, the strange line below was needed
+          -- to correctly compile the design in ISE for Atlys:
+          -- resp_time <= resp_time;
           if resp_wait > 0 then
             resp_wait <= 0;
           end if;
@@ -842,79 +879,92 @@ begin  -- architecture beh_rtl
           snd_resp_ack_sync <= snd_resp_ack;
           -- Set the busy flags
           if cex_fr_wr = '1' then
-            resp_busy(v_fr_head)    <= '1';
-            resp_num(v_fr_head)     <= cex_fr_num;
-            resp_len(v_fr_head)     <= cex_fr_length;
-            resp_cmd_num(v_fr_head) <= cex_cmd_num;
-          end if;
-          -- Service the RESP confirmations
-          if resp_wait = 0 then
-            -- We must wait until the memory output is stable
-            if resp_ack_rd_ptr /= resp_ack_wr_ptr then
-              -- There is confirmation to handle
-              v_frame_to_confirm := to_integer(unsigned(sys_resp_ack_dout(C_RESP_SYS_FBITS-1 downto 0)));
-              if unsigned(sys_resp_ack_dout) = resp_num(v_frame_to_confirm) then
-                -- We check if it is not an outdated delayed ACK
-                resp_busy(v_frame_to_confirm) <= '0';
-              end if;
-              -- Advance the pointer
-              resp_ack_rd_ptr <= std_logic_vector(unsigned(resp_ack_rd_ptr) + 1);
-              -- Set the flag needed to wait until the meory output is stable.
-              resp_wait       <= 1;
-            end if;
-          end if;
-          -- We can try to advance the tail pointer
-          -- But where is it stored??? It is our sole responsibility
-          -- To maintain it!
-          -- Writing of responses is done by our "c1" process.
-          if v_fr_head /= to_integer(fr_tail) then
-            -- There is a response that is not confirmed yet
-            if resp_busy(to_integer(fr_tail)) = '0' then
-              -- We may advance the tail pointer, but we must be sure,
-              -- that this frame is not transmitted now!
-              -- Now we do it in a very simple suboptimal way - just checking
-              -- if the frame_to_transmit is equal to fr_tail.
-              -- If yes, then we wait.
-              if frame_to_transmit /= fr_tail then
-                fr_tail <= fr_tail + 1;
-                -- However, when moving the frame slot tail pointer, we should also try to
-                -- move the circular buffer tail pointer.
-
-              end if;
-            end if;
-          end if;
-          if not in_transmission then
-            -- Check if the frame to transmit is busy
-            if resp_busy(to_integer(frame_to_transmit)) = '1' then
-              -- What if the response was fried just above?
-              -- Then we may start its transmission.
-              -- However, it is not a problem, as the tail wont be moved after
-              -- that response as long, as it is being transmitted...
-              v_word_adr      := 1024*to_integer(frame_to_transmit);
-              snd_resp_start  <= std_logic_vector(to_unsigned(v_word_adr, C_RESP_ABITS));
-              v_word_adr      := v_word_adr + (3+to_integer(resp_len(to_integer(frame_to_transmit))));
-              snd_resp_end    <= std_logic_vector(to_unsigned(v_word_adr, C_RESP_ABITS));
-              snd_cmd_frm_num <= resp_cmd_num(to_integer(frame_to_transmit));
-              snd_resp_req    <= not snd_resp_req;
-              in_transmission <= true;
-            else
-              -- Check the next response
-              frame_to_transmit <= frame_to_transmit + 1;
-            end if;
+            resp_busy(v_fr_head)     <= '1';
+            resp_time(v_fr_head)     <= time_stamp;
+            resp_time(v_fr_head)(15) <= not time_stamp(15);  -- Negate to ensure
+                                        -- immediate transmission
+            resp_num(v_fr_head)      <= cex_fr_num;
+            resp_len(v_fr_head)      <= cex_fr_length;
+            resp_cmd_num(v_fr_head)  <= cex_cmd_num;
           else
-            -- Transmission is in progress
-            if snd_resp_ack_sync = snd_resp_req then
-              in_transmission   <= false;
-              frame_to_transmit <= frame_to_transmit + 1;
+            -- Service the RESP confirmations
+            if resp_wait = 0 then
+              -- We must wait until the memory output is stable
+              -- Now we should adjust the retransmission threshold (remember that
+              -- the averaged value is multiplied by 2**C_RTT_AVRG)
+              average_round_trip <= (average_round_trip - shift_right(average_round_trip, C_RTT_AVRG)) +
+                                    unsigned(sys_resp_ack_dout(15 downto 0));
+              if resp_ack_rd_ptr /= resp_ack_wr_ptr then
+                -- There is confirmation to handle
+                v_frame_to_confirm := to_integer(unsigned(sys_resp_ack_dout(C_RESP_SYS_FBITS-1+16 downto 16)));
+                if unsigned(sys_resp_ack_dout(30 downto 16)) = resp_num(v_frame_to_confirm) then
+                  -- We check if it is not an outdated delayed ACK
+                  resp_busy(v_frame_to_confirm) <= '0';
+                end if;
+                -- Advance the pointer
+                resp_ack_rd_ptr <= std_logic_vector(unsigned(resp_ack_rd_ptr) + 1);
+                -- Set the flag needed to wait until the memory output is stable.
+                resp_wait       <= 1;
+              end if;
+            end if;
+            -- We can try to advance the tail pointer
+            -- But where is it stored??? It is our sole responsibility
+            -- To maintain it!
+            -- Writing of responses is done by our "c1" process.
+            if v_fr_head /= to_integer(fr_tail) then
+              -- There is a response that is not confirmed yet
+              if resp_busy(to_integer(fr_tail)) = '0' then
+                -- We may advance the tail pointer, but we must be sure,
+                -- that this frame is not transmitted now!
+                -- Now we do it in a very simple suboptimal way - just checking
+                -- if the frame_to_transmit is equal to fr_tail.
+                -- If yes, then we wait.
+                if frame_to_transmit /= fr_tail then
+                  fr_tail <= fr_tail + 1;
+                  -- However, when moving the frame slot tail pointer, we should also try to
+                  -- move the circular buffer tail pointer.
+
+                end if;
+              end if;
+            end if;
+            if not in_transmission then
+              -- Check if the frame to transmit is busy and the sufficient amount
+              -- of time elapsed since the previous transmission of the frame.
+              -- We should also somehow mark the frames that are transmitted
+              -- for the first time (the simplest trick would be to take the
+              -- negated value of the current timestamp?)
+              v_round_trip := time_stamp - resp_time(to_integer(frame_to_transmit));
+              if (resp_busy(to_integer(frame_to_transmit)) = '1') and
+                (v_round_trip > retr_threshold) then
+                -- Here we should also verify, that 
+                -- What if the response was fried just above?
+                -- Then we may start its transmission.
+                -- However, it is not a problem, as the tail wont be moved after
+                -- that response as long, as it is being transmitted...
+                v_word_adr                               := 1024*to_integer(frame_to_transmit);
+                snd_resp_start                           <= std_logic_vector(to_unsigned(v_word_adr, C_RESP_ABITS));
+                v_word_adr                               := v_word_adr + (3+to_integer(resp_len(to_integer(frame_to_transmit))));
+                snd_resp_end                             <= std_logic_vector(to_unsigned(v_word_adr, C_RESP_ABITS));
+                snd_cmd_frm_num                          <= resp_cmd_num(to_integer(frame_to_transmit));
+                snd_resp_time                            <= std_logic_vector(time_stamp);
+                resp_time(to_integer(frame_to_transmit)) <= time_stamp;
+                snd_resp_req                             <= not snd_resp_req;
+                in_transmission                          <= true;
+              else
+                                        -- Check the next response
+                frame_to_transmit <= frame_to_transmit + 1;
+              end if;
+            else
+                                        -- Transmission is in progress
+              if snd_resp_ack_sync = snd_resp_req then
+                in_transmission   <= false;
+                frame_to_transmit <= frame_to_transmit + 1;
+              end if;
             end if;
           end if;
         end if;
       end if;
     end process psf1;
-
-    -- Process responsible for handling the busy flags  sending of frames, and handling of head and tail
-    -- pointes
-
 
   end block cb1;
 
