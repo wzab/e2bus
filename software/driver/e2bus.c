@@ -714,7 +714,7 @@ static int prepare_gup(struct e2b_v1_packet_to_send * pts, cmd_slot * cs)
         goto error_prep_gup_1;
     }
     //Pages pinned, create the mapping
-    vbuf = vmap(pages,nr_pages,VM_MAP, pgprot_writecombine(PAGE_KERNEL));
+    vbuf = vmap(pages,nr_pages,VM_MAP, PAGE_KERNEL);
     vresp = vbuf + offset;
 #ifdef E2B_DEBUG
     pr_alert("test vbuf %lx vresp %lx, offset=%lx",(unsigned long)vbuf,(unsigned long)vresp,offset);
