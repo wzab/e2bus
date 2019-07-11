@@ -6,7 +6,7 @@
 -- Author     : FPGA Developer  <xl@wzab.nasz.dom>
 -- Company    : 
 -- Created    : 2018-03-15
--- Last update: 2019-07-04
+-- Last update: 2019-07-11
 -- Platform   : 
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -243,7 +243,7 @@ begin  -- architecture beh_rtl
   rst_p <= not rst_n;
 
   -- Selection of time scale for limiting the retransmission rate (16 bits)
-  time_stamp <= time_cnt(17 downto 2);
+  time_stamp <= time_cnt(24 downto 9);
 
   retr_threshold <= average_round_trip(C_RTT_AVRG+14 downto C_RTT_AVRG-1);
 
@@ -871,7 +871,7 @@ begin  -- architecture beh_rtl
           -- to correctly compile the design in ISE for Atlys:
           -- resp_time <= resp_time;
           if resp_wait > 0 then
-            resp_wait <= 0;
+            resp_wait <= resp_wait-1;
           end if;
           v_fr_head         := to_integer(cex_fr_num(C_RESP_SYS_FBITS-1 downto 0));
           -- Synchronize the transmission ACK signal (to be moved later to the
@@ -890,12 +890,14 @@ begin  -- architecture beh_rtl
             -- Service the RESP confirmations
             if resp_wait = 0 then
               -- We must wait until the memory output is stable
-              -- Now we should adjust the retransmission threshold (remember that
-              -- the averaged value is multiplied by 2**C_RTT_AVRG)
-              average_round_trip <= (average_round_trip - shift_right(average_round_trip, C_RTT_AVRG)) +
-                                    unsigned(sys_resp_ack_dout(15 downto 0));
               if resp_ack_rd_ptr /= resp_ack_wr_ptr then
                 -- There is confirmation to handle
+                -- Now we should adjust the retransmission threshold (remember that
+                -- the averaged value is multiplied by 2**C_RTT_AVRG)
+                v_round_trip       := time_stamp - unsigned(sys_resp_ack_dout(15 downto 0));
+                average_round_trip <= (average_round_trip - shift_right(average_round_trip, C_RTT_AVRG)) +
+                                      v_round_trip;
+                
                 v_frame_to_confirm := to_integer(unsigned(sys_resp_ack_dout(C_RESP_SYS_FBITS-1+16 downto 16)));
                 if unsigned(sys_resp_ack_dout(30 downto 16)) = resp_num(v_frame_to_confirm) then
                   -- We check if it is not an outdated delayed ACK
@@ -904,7 +906,7 @@ begin  -- architecture beh_rtl
                 -- Advance the pointer
                 resp_ack_rd_ptr <= std_logic_vector(unsigned(resp_ack_rd_ptr) + 1);
                 -- Set the flag needed to wait until the memory output is stable.
-                resp_wait       <= 1;
+                resp_wait       <= 2;
               end if;
             end if;
             -- We can try to advance the tail pointer
