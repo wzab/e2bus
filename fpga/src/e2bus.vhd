@@ -6,7 +6,7 @@
 -- Author     : FPGA Developer  <xl@wzab.nasz.dom>
 -- Company    : 
 -- Created    : 2018-03-15
--- Last update: 2019-07-11
+-- Last update: 2019-07-14
 -- Platform   : 
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -791,9 +791,11 @@ begin  -- architecture beh_rtl
             v_frame_nr_8bit := v_frame_nr_8bit - unsigned(r1.exp_pkt_num(7 downto 0));
             if v_frame_nr_8bit(7) = '1' then
               -- It was an older frame, so we should remove it as well
-              -- We need to read its descriptor
-              c1.sys_desc_ad <= std_logic_vector(v_frame_nr_8bit(C_CDESC_ABITS-1 downto 0));
-              r1_n.state     <= S1_FREE_SGM_1;
+              -- We need to read its descriptor, but v_frame_nr_8bit was
+              -- destroyed by subtraction...
+              v_frame_nr_8bit := unsigned(sys_cmd_frame_dout(7 downto 0));
+              c1.sys_desc_ad  <= std_logic_vector(v_frame_nr_8bit(C_CDESC_ABITS-1 downto 0));
+              r1_n.state      <= S1_FREE_SGM_1;
             else
               -- cleaning is finished, we return to servicing the packets
               r1_n.exp_pkt_num <= r1.exp_pkt_num + 1;
@@ -897,7 +899,7 @@ begin  -- architecture beh_rtl
                 v_round_trip       := time_stamp - unsigned(sys_resp_ack_dout(15 downto 0));
                 average_round_trip <= (average_round_trip - shift_right(average_round_trip, C_RTT_AVRG)) +
                                       v_round_trip;
-                
+
                 v_frame_to_confirm := to_integer(unsigned(sys_resp_ack_dout(C_RESP_SYS_FBITS-1+16 downto 16)));
                 if unsigned(sys_resp_ack_dout(30 downto 16)) = resp_num(v_frame_to_confirm) then
                   -- We check if it is not an outdated delayed ACK
