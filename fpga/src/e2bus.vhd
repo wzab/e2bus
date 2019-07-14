@@ -540,7 +540,7 @@ begin  -- architecture beh_rtl
     type T_R1_STATE is (S1_IDLE_0, S1_IDLE_1, S1_EXEC_0, S1_FREE_SGM_0, S1_FREE_SGM_1);
 
     type T_R1_REGS is record
-      state             : T_R1_STATE;
+      state            : T_R1_STATE;
       --exp_frm_num       : unsigned(15 downto 0);
       --resp_frm_num      : unsigned(14 downto 0);
       --sys_cmd_frame_ad  : unsigned(C_CFR_SYS_ABITS-1 downto 0);
@@ -548,13 +548,13 @@ begin  -- architecture beh_rtl
       --sys_resp_dpr_dout : std_logic_vector(31 downto 0);
       --sys_resp_dpr_wr   : std_logic;
       --length            : unsigned(15 downto 0);
-      exp_pkt_num       : unsigned(15 downto 0);
-      exec_start        : std_logic;
-      cmd_frame_rd_ptr  : std_logic_vector(C_CFR_ABITS-1 downto 0);
+      exp_pkt_num      : unsigned(15 downto 0);
+      exec_start       : std_logic;
+      cmd_frame_rd_ptr : std_logic_vector(C_CFR_ABITS-1 downto 0);
     end record T_R1_REGS;
 
     constant C_R1_REGS_INIT : T_R1_REGS := (
-      state             => S1_IDLE_0,
+      state            => S1_IDLE_0,
       --exp_frm_num       => to_unsigned(1, 16),
       --resp_frm_num      => (others => '0'),
       --sys_cmd_frame_ad  => (others => '0'),
@@ -562,9 +562,9 @@ begin  -- architecture beh_rtl
       --sys_resp_dpr_dout => (others => '0'),
       --sys_resp_dpr_wr   => '0',
       --length            => (others => '0'),
-      exp_pkt_num       => to_unsigned(1, 16),
-      exec_start        => '0',
-      cmd_frame_rd_ptr  => (others => '0')
+      exp_pkt_num      => to_unsigned(1, 16),
+      exec_start       => '0',
+      cmd_frame_rd_ptr => (others => '0')
       );
 
     type T_C1_COMB is record
@@ -766,7 +766,7 @@ begin  -- architecture beh_rtl
               r1_n.cmd_frame_rd_ptr <= v_sys_cmd_frame_ad;
               -- First we need to read the frame stored in the next segment of
               -- circular buffer
-              c1.request_cmd_frame  <= '1';  -- To access the cmd_frame DPR
+              c1.request_cmd_frame  <= '1';    -- To access the cmd_frame DPR
               --v_sys_cmd_frame_ad    := stlv2cdesc_pend(sys_desc_dout);
               c1.sys_cmd_frame_ad   <= v_sys_cmd_frame_ad(v_sys_cmd_frame_ad'left downto 2);
               -- in the next state, we will get the number of the next frame
@@ -774,14 +774,14 @@ begin  -- architecture beh_rtl
             else
               -- Loop to waiting for the next packet
               -- Increase the number of the expected packet
-              r1_n.exp_pkt_num <= r1.exp_pkt_num + 1;
+              r1_n.exp_pkt_num     <= r1.exp_pkt_num + 1;
               r1_n.exp_pkt_num(15) <= '0';     -- enforce modulo 2^15
-              r1_n.state       <= S1_IDLE_1;
+              r1_n.state           <= S1_IDLE_1;
             end if;
           end if;
         when S1_FREE_SGM_0 =>
           -- We still need access to the CMD FRAME DPR
-          c1.request_cmd_frame <= '1';       -- To access the cmd_frame DPR
+          c1.request_cmd_frame <= '1';  -- To access the cmd_frame DPR
           -- Here we need to detect if it was the last segment
           -- If yes, then we don't do anything!!!
           -- However that detection is not trivial. We can't rely on having the
@@ -799,19 +799,19 @@ begin  -- architecture beh_rtl
               -- We need to read its descriptor, but v_frame_nr_8bit was
               -- destroyed by subtraction...
               v_frame_nr_8bit := unsigned(sys_cmd_frame_dout(7 downto 0));
-              c1.sys_desc_ad <= std_logic_vector(v_frame_nr_8bit(C_CDESC_ABITS-1 downto 0));
-              r1_n.state     <= S1_FREE_SGM_1;
+              c1.sys_desc_ad  <= std_logic_vector(v_frame_nr_8bit(C_CDESC_ABITS-1 downto 0));
+              r1_n.state      <= S1_FREE_SGM_1;
             else
               -- cleaning is finished, we return to servicing the packets
-              r1_n.exp_pkt_num <= r1.exp_pkt_num + 1;
+              r1_n.exp_pkt_num     <= r1.exp_pkt_num + 1;
               r1_n.exp_pkt_num(15) <= '0';     -- enforce modulo 2^15
-              r1_n.state       <= S1_IDLE_1;
+              r1_n.state           <= S1_IDLE_1;
             end if;
           else
             -- cleaning is finished, we return to servicing the packets
-            r1_n.exp_pkt_num <= r1.exp_pkt_num + 1;
+            r1_n.exp_pkt_num     <= r1.exp_pkt_num + 1;
             r1_n.exp_pkt_num(15) <= '0';       -- enforce modulo 2^15
-            r1_n.state       <= S1_IDLE_1;
+            r1_n.state           <= S1_IDLE_1;
           end if;
         when S1_FREE_SGM_1 =>
           -- and adjust the tail pointer
@@ -821,7 +821,7 @@ begin  -- architecture beh_rtl
           r1_n.cmd_frame_rd_ptr <= v_sys_cmd_frame_ad;
           -- r1_n.cmd_frame_rd_ptr <= stlv2cdesc_pend(sys_desc_dout);
           -- We still need access to the CMD FRAME DPR
-          c1.request_cmd_frame  <= '1';      -- To access the cmd_frame DPR
+          c1.request_cmd_frame  <= '1';        -- To access the cmd_frame DPR
           -- Now we can read the descriptor
           --v_sys_cmd_frame_ad    := stlv2cdesc_pend(sys_desc_dout);
           c1.sys_cmd_frame_ad   <= v_sys_cmd_frame_ad(v_sys_cmd_frame_ad'left downto 2);
@@ -906,7 +906,7 @@ begin  -- architecture beh_rtl
                 v_round_trip       := time_stamp - unsigned(sys_resp_ack_dout(15 downto 0));
                 average_round_trip <= (average_round_trip - shift_right(average_round_trip, C_RTT_AVRG)) +
                                       v_round_trip;
-                
+
                 v_frame_to_confirm := to_integer(unsigned(sys_resp_ack_dout(C_RESP_SYS_FBITS-1+16 downto 16)));
                 if unsigned(sys_resp_ack_dout(30 downto 16)) = resp_num(v_frame_to_confirm) then
                   -- We check if it is not an outdated delayed ACK
