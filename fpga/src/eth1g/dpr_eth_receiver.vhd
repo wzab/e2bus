@@ -551,7 +551,7 @@ begin  -- beh1
           -- Please note, that the r.cmd_frame_num is updated only in the first
           -- two cycles. That's why we can safely use that approach.
           v_comp_frame_nums   := unsigned(stlv2cdesc_frm_num(cmd_desc_dpr_din)) - unsigned(r.cmd_frame_num);
-          r_n.frnum_is_bigger <= v_comp_frame_nums(15); 
+          r_n.frnum_is_bigger <= v_comp_frame_nums(14);  -- frame numbers are 15-bit!
         else
           -- Rx_Dv = 0!
           -- Packet broken, or completed?
