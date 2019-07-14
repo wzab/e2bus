@@ -81,7 +81,7 @@ struct e2b_v1_device_connection {
 
 int comp_mod_2_15(uint16_t v1, uint16_t v2)
 {
-    uint16_t res = v1-v2;
+    uint16_t res = (v1 & 0x7fff) -(v2 & 0x7fff);
     if ((res & 0x7fff) == 0) return 0;
     if ((res & 0x4000) != 0) return -1;
     else return 1;

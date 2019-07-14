@@ -26,16 +26,17 @@
 #include <stdlib.h>
 #include <sys/ioctl.h>
 #include <stdint.h>
-struct sockaddr { int a; }; //for old Knoppix or Buildroot!
+//struct sockaddr { int a; }; //for old Knoppix or Buildroot!
 #include "e2bus.h"
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <string.h>
+#include <unistd.h>
 
 struct e2b_v1_device_connection dc = {
-    .ifname = "eth0",
-    .dest_mac = "\xde\xad\xba\xbe\xbe\xef",
+    .ifname = "enp3s0f0",
+    .dest_mac = "\x02\x0d\xdb\xa1\x15\x99",
 };
 struct e2b_v1_packet_to_send pts;
 
@@ -114,6 +115,7 @@ int main(int argc, char **argv)
     //return 0;
     //Connect to the device
     res = ioctl(fo,E2B_IOC_OPEN,&dc);
+    usleep(500000);
     printf("OPEN returns:%d\n",res);
     for(nt=0; nt<n_repeat; nt++) {
         printf("nt=%d\n",nt);
@@ -143,15 +145,13 @@ int main(int argc, char **argv)
         fr3 = ioctl(fo,E2B_IOC_SEND_ASYNC,&pts);
         printf("SEND3 returns:%d\n",(int)fr3);
         //Now we prepare for transmission
-        /*
-        pts.cmd = a4;
+/*        pts.cmd = a4;
         pts.cmd_len = sizeof(a4);
         pts.resp = b4;
         pts.max_resp_len = sizeof(b4);
         fr4 = ioctl(fo,E2B_IOC_SEND_ASYNC,&pts);
-        prntf("SEND4 returns:%d\n",(int)fr4);
-        printf("waiting for results\n");
-        */
+        printf("SEND4 returns:%d\n",(int)fr4);
+*/        printf("waiting for results\n");
         while(1) {
             long res=ioctl(fo,E2B_IOC_RECEIVE,1);
             if(res<0) {
@@ -159,7 +159,7 @@ int main(int argc, char **argv)
                 exit(res);
             }
             printf(".");
-            if(res>=fr3) break;
+            if(comp_mod_2_15(res,fr3)>=0) break;
         }
         printf("Results from frame 1\n");
         res2 = *(uint32_t*) b;
@@ -184,8 +184,7 @@ int main(int argc, char **argv)
         printf("\n");
         printf("last 4 bytes:");
         for(i=res2-8; i<res2-4; i++) printf("%2.2x,",b3[i]);
-        printf("\n");
-        /*
+        printf("\n");/*
         printf("Results from frame 4\n");
         res2 = *(uint32_t*) b4;
         printf("len=%d\n",res2);
@@ -193,8 +192,7 @@ int main(int argc, char **argv)
         printf("\n");
         printf("last 4 bytes:");
         for(i=res2-8; i<res2-4; i++) printf("%2.2x,",b4[i]);
-        printf("\n");
-        */
+        printf("\n");*/
     }
     //Disconnect from the device
     res = ioctl(fo,E2B_IOC_CLOSE,NULL);
