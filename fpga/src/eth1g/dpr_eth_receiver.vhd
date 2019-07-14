@@ -7,7 +7,7 @@
 -- License    : Dual LGPL/BSD License
 -- Company    : 
 -- Created    : 2014-11-10
--- Last update: 2019-07-04
+-- Last update: 2019-07-14
 -- Platform   : 
 -- Standard   : VHDL'93
 -------------------------------------------------------------------------------
