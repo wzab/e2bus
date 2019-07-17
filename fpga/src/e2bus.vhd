@@ -6,7 +6,7 @@
 -- Author     : FPGA Developer  <xl@wzab.nasz.dom>
 -- Company    : 
 -- Created    : 2018-03-15
--- Last update: 2019-07-14
+-- Last update: 2019-07-17
 -- Platform   : 
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -23,6 +23,7 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 library work;
 use work.e2bus_pkg.all;
+use work.wb_pkg.all;
 
 entity e2bus is
 
@@ -37,6 +38,10 @@ entity e2bus is
     my_mac  : in  std_logic_vector(47 downto 0);
     sys_clk : in  std_logic;
     rst_n   : in  std_logic;
+    -- WB interface
+    wb_m2s  : out t_wb_m2s;
+    wb_s2m  : in  t_wb_s2m;
+    wb_clk  : out std_logic;
     -- MAC interface
     Rx_Clk  : in  std_logic;
     Rx_Er   : in  std_logic;
@@ -219,24 +224,6 @@ architecture beh_rtl of e2bus is
       doutb : out std_logic_vector(7 downto 0)
       );
   end component;
-
-  component wb_test_slvx is
-    port (
-      slv_clk_i   : in  std_logic;
-      slv_rst_i   : in  std_logic;
-      slv_dat_i   : in  std_logic_vector(31 downto 0);
-      slv_dat_o   : out std_logic_vector(31 downto 0);
-      slv_adr_i   : in  std_logic_vector(31 downto 0);
-      slv_cyc_i   : in  std_logic;
-      slv_lock_i  : in  std_logic;
-      slv_sel_i   : in  std_logic;
-      slv_we_i    : in  std_logic;
-      slv_ack_o   : out std_logic;
-      slv_err_o   : out std_logic;
-      slv_rty_o   : out std_logic;
-      slv_stall_o : out std_logic;
-      slv_stb_i   : in  std_logic);
-  end component wb_test_slvx;
 
 begin  -- architecture beh_rtl
 
@@ -655,38 +642,21 @@ begin  -- architecture beh_rtl
     sys_cmd_frame_ad <= c1.sys_cmd_frame_ad when c1.request_cmd_frame = '1' else cex_cmd_frame_ad;
     cmd_frame_rd_ptr <= r1.cmd_frame_rd_ptr;
     cex_exec_start   <= r1.exec_start;
-
-    wb_test_slv_1 : wb_test_slvx
-      port map (
-        slv_clk_i   => wb_clk,
-        slv_rst_i   => rst_e2b_p,
-        slv_dat_i   => wb_dat_o,
-        slv_dat_o   => wb_dat_i,
-        slv_adr_i   => wb_adr_o,
-        slv_cyc_i   => wb_cyc_o,
-        slv_lock_i  => '0',
-        slv_sel_i   => '1',
-        slv_we_i    => wb_we_o,
-        slv_ack_o   => wb_ack_i,
-        slv_err_o   => wb_err_i,
-        slv_rty_o   => wb_rty_i,
-        slv_stall_o => wb_stall_i,
-        slv_stb_i   => wb_stb_o);
-
+    
     cmd_exec_1 : entity work.cmd_exec_wb
       port map (
-        wb_adr_o      => wb_adr_o,
-        wb_dat_o      => wb_dat_o,
-        wb_dat_i      => wb_dat_i,
-        wb_we_o       => wb_we_o,
-        wb_sel_o      => wb_sel_o,
-        wb_stb_o      => wb_stb_o,
-        wb_ack_i      => wb_ack_i,
-        wb_cyc_o      => wb_cyc_o,
+        wb_adr_o      => wb_m2s.adr,
+        wb_dat_o      => wb_m2s.dat,
+        wb_we_o       => wb_m2s.we,
+        wb_sel_o      => wb_m2s.sel,
+        wb_cyc_o      => wb_m2s.cyc,
+        wb_stb_o      => wb_m2s.stb,
+        wb_dat_i      => wb_s2m.dat,
+        wb_ack_i      => wb_s2m.ack,
+        wb_err_i      => wb_s2m.err,
+        wb_rty_i      => wb_s2m.rty,
+        wb_stall_i    => wb_s2m.stall,
         wb_clk        => wb_clk,
-        wb_err_i      => wb_err_i,
-        wb_rty_i      => wb_rty_i,
-        wb_stall_i    => wb_stall_i,
         desc_din      => sys_desc_dout,
         cmd_frame_ad  => cex_cmd_frame_ad,
         cmd_frame_din => sys_cmd_frame_dout,
