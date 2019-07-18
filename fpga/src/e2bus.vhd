@@ -6,7 +6,7 @@
 -- Author     : FPGA Developer  <xl@wzab.nasz.dom>
 -- Company    : 
 -- Created    : 2018-03-15
--- Last update: 2019-07-17
+-- Last update: 2019-07-18
 -- Platform   : 
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -625,7 +625,6 @@ begin  -- architecture beh_rtl
     signal wb_stb_o   : std_logic                     := '0';
     signal wb_ack_i   : std_logic                     := '0';
     signal wb_cyc_o   : std_logic                     := '0';
-    signal wb_clk     : std_logic                     := '0';
     -- WB optional signals
     signal wb_err_i   : std_logic                     := '0';
     signal wb_rty_i   : std_logic                     := '0';

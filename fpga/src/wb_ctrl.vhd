@@ -6,7 +6,7 @@
 -- Author     : Wojciech M. Zabolotny  <wzab01@gmail.com>
 -- Company    : 
 -- Created    : 2018-03-10
--- Last update: 2018-09-02
+-- Last update: 2019-07-18
 -- Platform   : 
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -33,7 +33,7 @@ entity wb_ctrl is
     wb_dat_o   : out std_logic_vector(31 downto 0);
     wb_dat_i   : in  std_logic_vector(31 downto 0);
     wb_we_o    : out std_logic;
-    wb_sel_o   : out std_logic;
+    wb_sel_o   : out std_logic_vector(3 downto 0);
     wb_stb_o   : out std_logic;
     wb_ack_i   : in  std_logic;
     wb_cyc_o   : out std_logic;
@@ -317,7 +317,8 @@ begin  -- architecture rtl
   wb_stb_o <= r.wb_stb_o;
   wb_cyc_o <= r.wb_cyc_o;
   wb_we_o  <= r.wb_we_o;
-
+  wb_sel_o <= (others => '1');
+  
   resp_av  <= c.resp_av;
   resp_out <= c.resp_dout;
   resp_end <= c.resp_end;

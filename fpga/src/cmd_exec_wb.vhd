@@ -6,7 +6,7 @@
 -- Author     : Wojciech M. Zabolotny  <wzab01@gmail.com>
 -- Company    : 
 -- Created    : 2018-03-10
--- Last update: 2018-09-14
+-- Last update: 2019-07-18
 -- Platform   : 
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -33,7 +33,7 @@ entity cmd_exec_wb is
     wb_dat_o   : out std_logic_vector(31 downto 0);
     wb_dat_i   : in  std_logic_vector(31 downto 0);
     wb_we_o    : out std_logic;
-    wb_sel_o   : out std_logic;
+    wb_sel_o   : out std_logic_vector(3 downto 0);
     wb_stb_o   : out std_logic;
     wb_ack_i   : in  std_logic;
     wb_cyc_o   : out std_logic;
