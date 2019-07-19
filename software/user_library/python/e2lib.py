@@ -23,7 +23,7 @@ CMP_EQU=4
 CMP_AND_EQU=5
 CMP_OR_EQU=6
 
-PKT_MAX_LEN=20
+PKT_MAX_LEN=200
 
 #Dictionary that will store the packets
 pkts = {}
@@ -68,6 +68,7 @@ def transmission_proc(ctx,pkts):
         (m_frnum,m_id,m_rlen) = struct.unpack("<h h L",m[0:8])
         m_cmd=struct.unpack("<%dL" % (m_rlen/4),m[8:])
         pkt=pkts.pop(m_id)
+        pkt.status=m_cmd[-1] >> 16
         pkt.response=m_cmd
         pkt.answered.set()
     
@@ -84,6 +85,7 @@ class E2pkt(object):
       self.sent = False
       self.answered = threading.Event()
       self.response = None
+      self.status = None
       self.cmds = []
       self.rlen = 1 # reserve one word for length!
     def __del__(self):
@@ -232,10 +234,10 @@ class E2pkt(object):
     if (oper < 0) or (oper > 6):
       raise Exception("Wrong operation code")    
     cmd = (4 << 28) | (oper << 21)
-    res = [cmd, addr, dta]
     if oper in (CMP_AND_EQU, CMP_OR_EQU):
-      #We need mask
-      res.append(mask)
+      res = [cmd, addr, mask, dta]
+    else:
+      res = [cmd, addr, dta]
     rlen=-1 #This command does not produce response, unless there is an error
     # In that case it produces one word of response
     return self.add_cmd(res,rlen)
@@ -250,10 +252,10 @@ class E2pkt(object):
     if (delay < 0) or (delay >= (1<<10)):
       raise Exception("Too big delay")    
     cmd = (5 << 28) | (oper << 21) | ((repeat-1) << 10) | delay
-    res = [cmd, addr, dta]
     if oper in (CMP_AND_EQU, CMP_OR_EQU):
-      #We need mask
-      res.append(mask)
+      res = [cmd, addr, mask, dta]
+    else:
+      res = [cmd, addr, dta]
     rlen=1 
     return self.add_cmd(res,rlen)
 
