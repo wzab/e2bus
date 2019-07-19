@@ -5,19 +5,19 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
-struct sockaddr { int a; }; //for old Knoppix or Buildroot!
+//struct sockaddr { int a; }; //for old Knoppix or Buildroot!
 #include <assert.h>
 #include <zmq.h>
 #include <pthread.h>
 #include <endian.h>
-#include "driver/e2bus.h"
+#include "e2bus.h"
 
 
 int fo;
 
 struct e2b_v1_device_connection dc = {
-    .ifname = "eth0",
-    .dest_mac = "\xde\xad\xba\xbe\xbe\xef",
+    .ifname = "enp3s0f1",
+    .dest_mac = "\x02\x0d\xdb\xa1\x15\x99",
 };
 struct e2b_v1_packet_to_send pts;
 
@@ -31,8 +31,9 @@ typedef struct e2b_req {
 typedef struct e2b_resp_obj e2b_resp_obj_t;
 
 typedef struct e2b_resp {
-    uint16_t id; // Request ID
-    uint16_t status; // Status of the response
+    uint16_t id; //Frame ID
+    uint16_t req_id; // Request ID
+    //uint16_t status; // Status of the response
     uint32_t rlen; //Length of the response in bytes (4* len in words)
     uint32_t dta[0]; //Vector with response words
 } e2b_resp_t;
@@ -165,6 +166,7 @@ void * serve_cmds(void * sv)
                 fr_num = ioctl(fo,E2B_IOC_SEND_ASYNC,&pts);
                 // Write the assigned number to the response object
                 e2resp->resp.id = fr_num;
+                e2resp->resp.req_id = e2req->id;
                 // Put the request object on the list
                 // We need to replace the identifier with the one assigned
                 // We add the request object to the list
@@ -203,7 +205,7 @@ void * serve_cmds(void * sv)
                     //Extract the length from the first word
                     e2resp->resp.rlen = le32toh(e2resp->resp.dta[0]); //Length is in bytes!
                     //Extract the status of the response
-                    e2resp->resp.status = le32toh(e2resp->resp.dta[e2resp->resp.rlen/4-1]); //The offset should be parametrized?
+                    //e2resp->resp.status = le32toh(e2resp->resp.dta[e2resp->resp.rlen/4-1]); //The offset should be parametrized?
                     //We transmit the response
                     msize=zmq_send(socket,&e2resp->resp, e2resp->resp.rlen+2*sizeof(uint16_t)+sizeof(uint32_t) ,0);
                     //Now we take it off the list
