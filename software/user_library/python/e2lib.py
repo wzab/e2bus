@@ -39,7 +39,7 @@ l2t_s.bind('inproc://src')
 def transmission_proc(ctx,pkts):
   #Prepare the socket for communication with the E2Bus gateway
   e2g_s=ctx.socket(zmq.PAIR)
-  e2g_s.connect('tcp://172.19.7.242:56789')
+  e2g_s.connect('tcp://127.0.0.1:56789')
   #Prepare the socket for communication between the library and the transmission thread
   t2l_s=ctx.socket(zmq.PAIR)
   t2l_s.connect('inproc://src')
@@ -65,7 +65,7 @@ def transmission_proc(ctx,pkts):
         #We have received the response vector!
         m=e2g_s.recv()
         print("received:" + str([hex(i) for i in m]))
-        (m_id,m_stat,m_rlen) = struct.unpack("<h h L",m[0:8])
+        (m_frnum,m_id,m_rlen) = struct.unpack("<h h L",m[0:8])
         m_cmd=struct.unpack("<%dL" % (m_rlen/4),m[8:])
         pkt=pkts.pop(m_id)
         pkt.response=m_cmd
@@ -255,6 +255,11 @@ class E2pkt(object):
       #We need mask
       res.append(mask)
     rlen=1 
+    return self.add_cmd(res,rlen)
+
+  def errclr(self):
+    res = [0xffFFffFF,]
+    rlen = 0    
     return self.add_cmd(res,rlen)
 
   def endcmd(self):
