@@ -145,8 +145,8 @@ void * serve_cmds(void * sv)
                 //Cast it to the e2b_req pointer
                 e2b_req_t * e2req = (e2b_req_t *) rbuf;
                 // Verify if the length is correct (not yet @!@)
-                printf("received id=%d len=%d\n, maxrlen=%d, first three bytes: %x %x %x",e2req->id, e2req->len,
-                e2req->maxrlen, (int) e2req->cmd[0],(int) e2req->cmd[1],(int) e2req->cmd[2]);
+                //printf("received id=%d len=%d\n, maxrlen=%d, first three bytes: %x %x %x",e2req->id, e2req->len,
+                //e2req->maxrlen, (int) e2req->cmd[0],(int) e2req->cmd[1],(int) e2req->cmd[2]);
                 // Create the request object
                 // Please remember, that we don't need to copy the command buffer.
                 // It is copied by the driver!
@@ -186,7 +186,7 @@ void * serve_cmds(void * sv)
             if(pits[1].revents) {
                 /* We have certains reponses ready */
                 long r2 = ioctl(fo,E2B_IOC_RECEIVE,0);
-                printf("received:%d\n",r2);
+                //printf("received:%d\n",r2);
                 /* Now we can scan the list until we find the last serviced */
                 while(1) {
                     //We should check that the list is not empty

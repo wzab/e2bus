@@ -29,11 +29,9 @@
 #include <memory>
 #include <future>
 #include <iostream>
-
+#include <chrono>
 namespace E2B
 {
-
-
 unique_resptr E2CmdRef::response()
 {
     //When no response is received yet, wait for it
@@ -383,15 +381,15 @@ unique_cmdptr E2BConn::endcmd()
 
 void i2c_init(E2B::E2BConn &cn, int i2c_base, int wb_freq, int i2c_freq)
 {
-  cn.write(i2c_base+2,0);
-  int div=int(wb_freq/5/i2c_freq);
-  cn.write(i2c_base,div & 0xff);
-  cn.write(i2c_base+1,(div>>8) & 0xff);
-  cn.write(i2c_base+1,(div>>8) & 0xff);
-  E2B::unique_cmdptr r=cn.write(i2c_base+2,128);
-  cn.end_pkt();
-  r->response();
-  return;
+    cn.write(i2c_base+2,0);
+    int div=int(wb_freq/5/i2c_freq);
+    cn.write(i2c_base,div & 0xff);
+    cn.write(i2c_base+1,(div>>8) & 0xff);
+    cn.write(i2c_base+1,(div>>8) & 0xff);
+    E2B::unique_cmdptr r=cn.write(i2c_base+2,128);
+    cn.end_pkt();
+    r->response();
+    return;
 }
 
 int i2c_rd(E2B::E2BConn &cn, int i2c_base, int adr)
@@ -420,7 +418,7 @@ void i2c_wr(E2B::E2BConn &cn, int i2c_base, int adr, int dta)
     // Wait until bit 2 is cleared
     cn.mrdntst(i2c_base+4, E2B::CMP_AND_EQU,2048,255,0,2);
     cn.rdntst(i2c_base+4, E2B::CMP_AND_EQU,0,128);
-    cn.write(i2c_base+3, dta);    
+    cn.write(i2c_base+3, dta);
     cn.write(i2c_base+4, 64 | 16);
     // Wait until bit 2 is cleared
     E2B::unique_cmdptr mr1 = cn.mrdntst(i2c_base+4,E2B::CMP_AND_EQU,2048,255,0,2);
@@ -433,12 +431,15 @@ void i2c_wr(E2B::E2BConn &cn, int i2c_base, int adr, int dta)
     return;
 }
 
+const int N_OF_TESTS = 100;
+uint32_t test_results[N_OF_TESTS];
+
 int main(int argc, char **argv)
 {
     {
         E2B::E2BConn cn("tcp://127.0.0.1:56789");
         cn.start("tcp://127.0.0.1:56789");
-        cn.errclr();
+        //cn.errclr();
         cn.end_pkt();
         for(int j=0; j<2; j++) {
             cn.write(10,std::vector<uint32_t> {10},1,1);
@@ -456,13 +457,22 @@ int main(int argc, char **argv)
                 std::cout << "," << std::hex << (*rr2)[i] << ",";
             std::cout << std::endl;
         }
-        i2c_init(cn,0,100000000,100000);        
+        i2c_init(cn,0,100000000,100000);
         i2c_wr(cn,0,0x74,0x8);
+        std::cout << std::hex;
+        auto start = std::chrono::high_resolution_clock::now();
         i2c_wr(cn,0,0x5d,0);
-        for(int j=0;j<20;j++) {
-			std::cout << j << ":" << i2c_rd(cn,0,0x5d) << ",";
-		}
-		std::cout << std::endl;
+        for(int j=0; j<N_OF_TESTS; j++) {
+            test_results[j]=i2c_rd(cn,0,0x5d);
+            i2c_wr(cn,0,0x75,0);
+        }
+        auto finish = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> texec = finish-start;
+        std::cout << "time:" << texec.count() << std::endl;
+        for(int j=0; j<N_OF_TESTS; j++) {
+            std::cout << j << ":" << test_results[j] << ",";
+        }
+        std::cout << std::endl;
     }
     return 0;
 }

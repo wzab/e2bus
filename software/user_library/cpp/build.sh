@@ -1,2 +1,2 @@
 #!/bin/bash
-g++ e2lib.cc -g -I . -lpthread -lzmq
+g++ e2lib.cc -O3 -g -I . -lpthread -lzmq
