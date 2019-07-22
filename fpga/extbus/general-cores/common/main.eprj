@@ -1,0 +1,8 @@
+vhdl work gencores_pkg.vhd
+vhdl work gc_extend_pulse.vhd
+vhdl work gc_sync_ffs.vhd
+vhdl work gc_pulse_synchronizer.vhd
+vhdl work gc_pulse_synchronizer2.vhd
+vhdl work gc_frequency_meter.vhd
+vhdl work gc_sync_register.vhd
+
