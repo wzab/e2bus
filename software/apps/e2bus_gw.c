@@ -144,6 +144,11 @@ void * serve_cmds(void * sv)
                 msize = zmq_recv (socket,rbuf,2000, 0);
                 //Cast it to the e2b_req pointer
                 e2b_req_t * e2req = (e2b_req_t *) rbuf;
+                //Correct endianness (LE in the packet!)
+                e2req->id = le16toh(e2req->id);
+                e2req->len = le16toh(e2req->len);
+                e2req->maxrlen = le32toh(e2req->maxrlen);
+                //Commands are tranferred transparently
                 // Verify if the length is correct (not yet @!@)
                 //printf("received id=%d len=%d\n, maxrlen=%d, first three bytes: %x %x %x",e2req->id, e2req->len,
                 //e2req->maxrlen, (int) e2req->cmd[0],(int) e2req->cmd[1],(int) e2req->cmd[2]);
@@ -193,6 +198,7 @@ void * serve_cmds(void * sv)
                     //It shouldn't be, but it is better to make sure!
                     //We get the object from the list
 
+                    uint32_t to_send;
                     e2b_resp_obj_t * e2resp = resp_tail;
                     if(e2resp == NULL) {
                         break; //No more elements in list (so head should be also NULL, who warrants that?)
@@ -203,11 +209,16 @@ void * serve_cmds(void * sv)
                     }
                     //Here we process the element
                     //Extract the length from the first word
-                    e2resp->resp.rlen = le32toh(e2resp->resp.dta[0]); //Length is in bytes!
+                    to_send = e2resp->resp.dta[0]; //Length is in bytes, it is stored by the driver in native endianness!!!
                     //Extract the status of the response
                     //e2resp->resp.status = le32toh(e2resp->resp.dta[e2resp->resp.rlen/4-1]); //The offset should be parametrized?
                     //We transmit the response
-                    msize=zmq_send(socket,&e2resp->resp, e2resp->resp.rlen+2*sizeof(uint16_t)+sizeof(uint32_t) ,0);
+                    //First we correct the endianness
+                    e2resp->resp.id = htole16(e2resp->resp.id);
+                    e2resp->resp.req_id = htole16(e2resp->resp.req_id);
+                    e2resp->resp.rlen = htole32(to_send);
+
+                    msize=zmq_send(socket,&e2resp->resp, to_send+2*sizeof(uint16_t)+sizeof(uint32_t),0);
                     //Now we take it off the list
                     resp_tail = e2resp->next;
                     if(resp_tail) {

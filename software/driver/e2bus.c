@@ -34,6 +34,7 @@
 #include <linux/netdevice.h>
 #include <linux/uaccess.h>
 #include <linux/vmalloc.h>
+#include <linux/interrupt.h>
 MODULE_LICENSE("GPL");
 #define SUCCESS 0
 #define DEVICE_NAME "e2bus_dev"
@@ -281,7 +282,7 @@ static void handle_responses(unsigned long sl_as_ul)
 #endif
 			//We remember that data in BUF are LE!
             cs->status_and_pos = le32_to_cpu(*(uint32_t *) &rs->buf[rs->pos + rs->len - 4]);
-            * (uint32_t *)cs->rbuf = cs->resp_len; //Store the length
+            * (uint32_t *)cs->rbuf = cs->resp_len; //Store the length with native endianness!!!
             //Mark packet as completed!
             cs->completed = 1;
             //Increase the number of command for which we expect response
