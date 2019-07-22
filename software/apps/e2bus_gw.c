@@ -16,8 +16,8 @@
 int fo;
 
 struct e2b_v1_device_connection dc = {
-    .ifname = "enp3s0f1",
-    .dest_mac = "\x02\x0d\xdb\xa1\x15\x99",
+    .ifname = "eth0",
+    .dest_mac = "\xde\xad\xba\xbe\xbe\xef",
 };
 struct e2b_v1_packet_to_send pts;
 

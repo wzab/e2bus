@@ -30,6 +30,9 @@
 #include <future>
 #include <iostream>
 #include <chrono>
+
+//constant char e2gw[] = "tcp://172.19.1.254:56789";
+const char e2gw[] = "tcp://127.0.0.1:56789";
 namespace E2B
 {
 unique_resptr E2CmdRef::response()
@@ -437,8 +440,8 @@ uint32_t test_results[N_OF_TESTS];
 int main(int argc, char **argv)
 {
     {
-        E2B::E2BConn cn("tcp://172.19.1.254:56789");
-        cn.start("tcp://172.19.1.254:56789");
+        E2B::E2BConn cn(e2gw);
+        cn.start(e2gw);
         //cn.errclr();
         cn.end_pkt();
         for(int j=0; j<2; j++) {
