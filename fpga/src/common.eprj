@@ -3,5 +3,5 @@ vhdl work e2bus_pkg.vhd
 vhdl work wb_pkg.vhd
 vhdl work sync_stlv.vhd
 vhdl work wb_ctrl.vhd
-vhdl work wb_test.vhd
 vhdl work e2bus.vhd
+include ../extbus

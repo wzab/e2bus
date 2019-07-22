@@ -6,7 +6,7 @@
 -- Author     : Wojciech M. Zabolotny <wzab@ise.pw.edu.pl>
 -- Company    : 
 -- Created    : 2017-05-20
--- Last update: 2018-09-23
+-- Last update: 2019-07-22
 -- Platform   : 
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -29,6 +29,9 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 library work;
+use work.wb_pkg.all;
+use work.wishbone_pkg.all;
+use work.wishbone_wb_pkg.all;
 
 library unisim;
 use unisim.vcomponents.all;
@@ -44,6 +47,8 @@ entity a7sb_e2bus is
     rmii2phy_txd    : out   std_logic_vector(1 downto 0);
     phy_mdc         : out   std_logic;
     phy_mdio        : inout std_logic;
+    i2c_sda         : inout std_logic;
+    i2c_scl         : inout std_logic;
     led1            : out   std_logic;
     rst_n           : in    std_logic;
     phy_rst_n       : out   std_logic
@@ -132,7 +137,13 @@ architecture beh of a7sb_e2bus is
   signal irqs       : std_logic_vector(7 downto 0) := (others => '0');
   signal ref_clk_ok : std_logic                    := '0';
   signal syn_rst_n  : std_logic                    := '0';
-  signal dbg_clk  : std_logic := '0';
+  signal dbg_clk    : std_logic                    := '0';
+
+
+  signal wb_m2s   : t_wb_m2s;
+  signal wb_s2m   : t_wb_s2m;
+  signal wb_s_in  : t_wishbone_slave_in;
+  signal wb_s_out : t_wishbone_slave_out;
 
 begin  -- beh
 
@@ -142,7 +153,7 @@ begin  -- beh
   phy2rmii_rx_er <= '0';                -- Not connected in PHY :( 
   mac2rmii_tx_er <= '0';
   phy_rst_n      <= syn_rst_n;          -- We assume, that phy_rst_n does not
-                             -- block clock
+  -- block clock
 
   led1    <= syn_rst_n;
   ipb_clk <= rmii2mac_tx_clk;           -- @!@ To be verified!
@@ -184,16 +195,18 @@ begin  -- beh
       rmii2phy_txd    => rmii2phy_txd,
       rmii2phy_tx_en  => rmii2phy_tx_en);
 
-  e2bus_1 : entity work.e2bus
+  e2bus_2 : entity work.e2bus
     generic map (
       PHY_DTA_WIDTH => 4)
     port map (
-      irqs    => irqs,
       leds    => leds,
+      irqs    => irqs,
       my_mac  => my_mac,
       sys_clk => ipb_clk,
       rst_n   => syn_rst_n,
-      --
+      wb_m2s  => wb_m2s,
+      wb_s2m  => wb_s2m,
+      wb_clk  => ipb_clk,
       Rx_Clk  => rmii2mac_rx_clk,
       Rx_Er   => rmii2mac_rx_er,
       Rx_Dv   => rmii2mac_rx_dv,
@@ -201,5 +214,19 @@ begin  -- beh
       Tx_Clk  => rmii2mac_tx_clk,
       Tx_En   => mac2rmii_tx_en,
       TxD     => mac2rmii_txd);
+
+
+  main_1 : entity work.main
+    port map (
+      rst_n_i   => rst_n,
+      clk_sys_i => ipb_clk,
+      wb_s_in   => wb_s_in,
+      wb_s_out  => wb_s_out,
+      i2c_scl   => i2c_scl,
+      i2c_sda   => i2c_sda);
+
+  wb_s_in <= wb2wishbone_m2s(wb_m2s);
+  wb_s2m  <= wishbone2wb_s2m(wb_s_out);
+
 
 end beh;
