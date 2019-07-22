@@ -65,7 +65,7 @@ def transmission_proc(ctx,pkts):
         #We have received the response vector!
         m=e2g_s.recv()
         print("received:" + str([hex(i) for i in m]))
-        (m_frnum,m_id,m_rlen) = struct.unpack("<h h L",m[0:8])
+        (m_frnum,m_id,m_rlen) = struct.unpack("<HHL",m[0:8])
         m_cmd=struct.unpack("<%dL" % (m_rlen/4),m[8:])
         pkt=pkts.pop(m_id)
         pkt.status=m_cmd[-1] >> 16
