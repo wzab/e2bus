@@ -40,6 +40,7 @@ def transmission_proc(ctx,pkts):
   #Prepare the socket for communication with the E2Bus gateway
   e2g_s=ctx.socket(zmq.PAIR)
   e2g_s.connect('tcp://127.0.0.1:56789')
+#  e2g_s.connect('tcp://172.19.1.254:56789')
   #Prepare the socket for communication between the library and the transmission thread
   t2l_s=ctx.socket(zmq.PAIR)
   t2l_s.connect('inproc://src')

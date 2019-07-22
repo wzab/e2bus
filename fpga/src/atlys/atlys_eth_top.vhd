@@ -7,7 +7,7 @@
 -- License    : BSD License
 -- Company    : 
 -- Created    : 2010-08-03
--- Last update: 2019-07-04
+-- Last update: 2019-07-22
 -- Platform   : 
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -27,6 +27,9 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 library work;
+use work.wb_pkg.all;
+use work.wishbone_pkg.all;
+use work.wishbone_wb_pkg.all;
 
 entity atlys_eth is
 
@@ -35,6 +38,9 @@ entity atlys_eth is
     btn            : in    std_logic_vector(3 downto 0);
     switches       : in    std_logic_vector(7 downto 0);
     gpio_led       : out   std_logic_vector(7 downto 0);
+    -- I2C interface
+    i2c_scl        : inout std_logic;
+    i2c_sda        : inout std_logic;
     -- PHY interface
     phy_col        : in    std_logic;
     phy_crs        : in    std_logic;
@@ -128,6 +134,10 @@ architecture beh of atlys_eth is
   signal phy_rxd_d        : std_logic_vector(7 downto 0);
   signal phy_rxer_d       : std_logic;
 
+  signal wb_m2s   : t_wb_m2s;
+  signal wb_s2m   : t_wb_s2m;
+  signal wb_s_in  : t_wishbone_slave_in;
+  signal wb_s_out : t_wishbone_slave_out;
 
 begin  -- beh
 
@@ -148,17 +158,18 @@ begin  -- beh
   tx_clk <= Clk_125M;
   rx_clk <= phy_rxclk;
 
-  e2bus_1 : entity work.e2bus
+  e2bus_2 : entity work.e2bus
     generic map (
-      PHY_DTA_WIDTH => 8
-      )
+      PHY_DTA_WIDTH => 8)
     port map (
-      irqs    => irqs,
       leds    => gpio_led,
+      irqs    => irqs,
       my_mac  => my_mac,
       sys_clk => clk_user,
       rst_n   => rst_n,
-      --
+      wb_m2s  => wb_m2s,
+      wb_s2m  => wb_s2m,
+      wb_clk  => clk_user,
       Rx_Clk  => phy_rxclk,
       Rx_Er   => phy_rxer_d,
       Rx_Dv   => phy_rxctl_rxdv_d,
@@ -203,6 +214,18 @@ begin  -- beh
       end if;
     end if;
   end process;
+
+  main_1 : entity work.main
+    port map (
+      rst_n_i   => rst_n,
+      clk_sys_i => clk_user,
+      wb_s_in   => wb_s_in,
+      wb_s_out  => wb_s_out,
+      i2c_scl   => i2c_scl,
+      i2c_sda   => i2c_sda);
+
+  wb_s_in  <= wb2wishbone_m2s(wb_m2s);
+  wb_s2m <= wishbone2wb_s2m(wb_s_out);
 
   -- reset
 

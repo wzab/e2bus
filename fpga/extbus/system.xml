@@ -1,0 +1,8 @@
+<sysdef top="main" masters="1">
+  <block name="main">
+    <blackbox name="i2c_master" 
+              type="i2c_master_top" 
+              addrbits="3"/>
+    <creg name="testreg" />
+  </block>
+</sysdef>
