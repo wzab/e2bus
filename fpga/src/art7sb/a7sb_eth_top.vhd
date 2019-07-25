@@ -6,7 +6,7 @@
 -- Author     : Wojciech M. Zabolotny <wzab@ise.pw.edu.pl>
 -- Company    : 
 -- Created    : 2017-05-20
--- Last update: 2019-07-22
+-- Last update: 2019-07-26
 -- Platform   : 
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -50,13 +50,18 @@ entity a7sb_e2bus is
     i2c_sda         : inout std_logic;
     i2c_scl         : inout std_logic;
     led1            : out   std_logic;
-    rst_n           : in    std_logic;
+    ext_rst_n       : in    std_logic;
     phy_rst_n       : out   std_logic
     );
 end a7sb_e2bus;
 
 architecture beh of a7sb_e2bus is
 
+  attribute keep       : string;
+  attribute mark_debug : string;
+
+  signal rst_n          : std_logic := '0';
+  signal reset_cnt      : integer   := 1000000;
   signal rst_p          : std_logic;
   signal phy2rmii_rx_er : std_logic;
 
@@ -145,6 +150,12 @@ architecture beh of a7sb_e2bus is
   signal wb_s_in  : t_wishbone_slave_in;
   signal wb_s_out : t_wishbone_slave_out;
 
+  attribute keep of wb_m2s         : signal is "true";
+  attribute mark_debug of wb_m2s   : signal is "true";
+  attribute keep of wb_s2m         : signal is "true";
+  attribute mark_debug of wb_s2m   : signal is "true";
+
+  
 begin  -- beh
 
 
@@ -228,5 +239,20 @@ begin  -- beh
   wb_s_in <= wb2wishbone_m2s(wb_m2s);
   wb_s2m  <= wishbone2wb_s2m(wb_s_out);
 
+  -- We need to generate long reset pulse
+  rst_extender : process (sys_clk, ext_rst_n) is
+  begin  -- process rst_extender
+    if ext_rst_n = '0' then             -- asynchronous reset (active high)
+      reset_cnt <= 1000000;
+      rst_n     <= '0';
+    elsif sys_clk'event and sys_clk = '1' then  -- rising clock edge
+      if reset_cnt > 0 then
+        reset_cnt <= reset_cnt - 1;
+        rst_n     <= '0';
+      else
+        rst_n <= '1';
+      end if;
+    end if;
+  end process rst_extender;
 
 end beh;
