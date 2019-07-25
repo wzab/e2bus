@@ -26,7 +26,7 @@ if { $eprj_vivado_version_allow_upgrade } {
 # Set the path to the board files
 set_param board.repoPaths [ file normalize ${eprj_board_files_path} ]
 # Create project
-create_project $eprj_proj_name ./$eprj_proj_name
+create_project -force $eprj_proj_name ./$eprj_proj_name
 
 # Set the directory path for the new project
 set proj_dir [get_property directory [current_project]]
@@ -224,6 +224,7 @@ proc handle_xdc {ablock args pdir line} {
     }
     add_files -norecurse -fileset $block(cnstrset) $nfile
     set file_obj [get_files -of_objects $block(cnstrset) $nfile]
+    set block(last_file_obj) $file_obj
     set_property "file_type" "XDC" $file_obj
 }
 
@@ -243,7 +244,20 @@ proc handle_xdc_ooc {ablock args pdir line} {
         add_files -norecurse -fileset $block(cnstrset) $nfile
         set file_obj [get_files -of_objects $block(cnstrset) $nfile]
         set_property "file_type" "XDC" $file_obj
+        set block(last_file_obj) $file_obj
         set_property USED_IN {out_of_context synthesis implementation} $file_obj
+    }
+}
+
+proc handle_target {ablock args pdir line} {
+    upvar $ablock block
+    if [string match $block(last_file_obj) "error"] {
+        eprj_error block "I don't know to set target in line $line"
+    } elseif [string match $block(last_file_obj) "none"] {
+        puts "Target ignored $line"
+    } else {
+        lassign $line fset
+        set_property "TARGET_CONSTRS_FILE" $block(last_file_obj) [get_filesets $fset]
     }
 }
 
@@ -366,6 +380,7 @@ array set line_handlers {
     vhdl          handle_vhdl
     ip            handle_ip
     
+    target        handle_target
     prop          handle_prop
     propadd       handle_propadd
     ooc           handle_ooc
@@ -540,6 +555,14 @@ current_run -implementation [get_runs impl_1]
 set file_ooc_runs [open "ooc_synth_runs.txt" "w"]
 puts $file_ooc_runs $vextproj_ooc_synth_runs
 close $file_ooc_runs
+
+
+set_property STEPS.SYNTH_DESIGN.ARGS.FLATTEN_HIERARCHY none [get_runs synth_1]
+set_property STEPS.SYNTH_DESIGN.ARGS.RETIMING true [get_runs synth_1]
+set_property STEPS.SYNTH_DESIGN.ARGS.KEEP_EQUIVALENT_REGISTERS false [get_runs synth_1]
+set_property STEPS.SYNTH_DESIGN.ARGS.RESOURCE_SHARING on [get_runs synth_1]
+set_property STEPS.SYNTH_DESIGN.ARGS.ASSERT true [get_runs synth_1]
+
 
 puts "INFO: Project created:$eprj_proj_name"
 
