@@ -43,8 +43,19 @@ MODULE_LICENSE("GPL");
 static int max_slaves = 4;
 module_param(max_slaves,int,0);
 MODULE_PARM_DESC(max_slaves,"Maximum number of slave FPGA devices serviced by the system.");
-
+static unsigned int loss_level = 0;
+module_param(loss_level,int,0);
+MODULE_PARM_DESC(loss_level,"1/loss_level defines probability of loss of the packet (either sent or received), 0 - no forced losses");
 static int proto_registered = 0; //Was the protocol registered? Should be deregistered at exit?
+static unsigned long loss_threshold = 0;
+
+static inline int should_drop(void)
+{
+	unsigned long rval;
+	if(loss_threshold==0) return 0;
+	rval = (unsigned long) get_random_long();
+	return rval < loss_threshold;
+};
 
 typedef struct {
     uint8_t cmd_fnum;
@@ -224,7 +235,12 @@ static void send_packet(unsigned long sl_as_ul)
             kfree_skb(newskb);
             return;
         }
-        dev_queue_xmit(newskb);
+        if(should_drop()) {
+			//Randomly drop packet to simulate low quality link
+			kfree_skb(newskb);
+		} else {
+           dev_queue_xmit(newskb);
+	    }
     } else {
         //pr_alert("in send packet - nothing to send");
         kfree_skb(newskb);
@@ -333,6 +349,12 @@ static int e2b_proto_rcv(struct sk_buff *skb, struct net_device *dev,
     int bc; //byte counter
     rcv_hdr = eth_hdr(skb);
     pkt_len = skb->len;
+    //First check if the packet should be randomly dropped (for testing of protocol
+    //in low quality links)
+    if(should_drop()) {
+		kfree_skb(skb);
+		return NET_RX_DROP;
+	}
     // First we try to identify the sender so we search the table of active slaves
     // When we receive the packet, we don't know with which slave it is associated
     // Therefore we need to find the right slave. (to be copied from FADE)
@@ -1244,7 +1266,13 @@ static int e2b_init(void)
 {
     int res;
     int i;
-    printk(KERN_ALERT "Welcomr to e2bus driver\n");
+    printk(KERN_ALERT "Welcome to e2bus driver\n");
+    /* Initialize the loss threshold used for testing */
+    if(loss_level) {
+		loss_threshold = ULONG_MAX/loss_level;
+	} else {
+		loss_threshold = 0;
+	}
     /* Create the table for slave devices */
     slave_table = kzalloc(sizeof(slave_data)*max_slaves, GFP_KERNEL);
     if (!slave_table) {
