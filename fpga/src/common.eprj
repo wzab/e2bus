@@ -2,6 +2,9 @@ vhdl work cmd_exec_wb.vhd
 vhdl work e2bus_pkg.vhd
 vhdl work wb_pkg.vhd
 vhdl work sync_stlv.vhd
+xdc sync_stlv.tcl
+prop "file_type" "TCL"
+prop "scoped_to_ref" "sync_stlv"
 vhdl work wb_ctrl.vhd
 vhdl work e2bus.vhd
 include ../extbus

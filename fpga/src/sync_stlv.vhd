@@ -6,7 +6,7 @@
 -- Author     : Wojciech Zabolotny  <xl@wzab.nasz.dom>
 -- Company    : 
 -- Created    : 2018-03-11
--- Last update: 2018-09-23
+-- Last update: 2019-07-25
 -- Platform   : 
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -40,7 +40,9 @@ end entity sync_stlv;
 
 architecture rtl of sync_stlv is
 
-  signal si0,si1,si2,so1,so2,so0  : std_logic := '0';
+  signal si0,si1,si2,si3,so1,so2,so0,so3  : std_logic := '0';
+  attribute ASYNC_REG : string;
+  attribute ASYNC_REG of si0, si1, si2, si3, so0, so1, so2, so3: signal is "TRUE";
   signal rst_in_0, rst_in_p, rst_out_0, rst_out_p  : std_logic := '1';
   signal sig_x : std_logic_vector(width-1 downto 0) := (others => '0');
   
@@ -77,7 +79,7 @@ begin  -- architecture rtl
       if rst_in_p = '1' then           -- synchronous reset (active high)
         si0 <= '0';
       else
-        si0 <= so2;
+        si0 <= so3;
       end if;
     end if;
   end process;
@@ -90,12 +92,14 @@ begin  -- architecture rtl
       if rst_in_p = '1' then            -- synchronous reset (active high)
         si1 <= '0';
         si2 <= '0';
+        si3 <= '0';
       else
-        if si1 = si2 then
+        if si2 = si3 then
           sig_x <= din;
-          si2 <= not si2;
+          si3 <= not si3;
         end if;
-          si1 <= si0;
+        si1 <= si0;
+        si2 <= si1;
       end if;
     end if;
   end process s1;
@@ -107,7 +111,7 @@ begin  -- architecture rtl
       if rst_out_p = '1' then           -- synchronous reset (active high)
         so0 <= '0';
       else
-        so0 <= si2;
+        so0 <= si3;
       end if;
     end if;
   end process;
@@ -119,10 +123,12 @@ begin  -- architecture rtl
       if rst_out_p = '1' then           -- synchronous reset (active high)
         so1 <= '0';
         so2 <= '0';
+        so3 <= '0';
       else
         so1 <= so0;
         so2 <= so1;
-        if so2 /= so1 then
+        so3 <= so2;
+        if so3 /= so2 then
           dout <= sig_x;
         end if;
       end if;
