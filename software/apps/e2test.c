@@ -104,7 +104,7 @@ int main(int argc, char **argv)
     //return 1;
     int res;
     int fo=open("/dev/e2b_dev0",O_RDWR);
-    if(!fo) {
+    if(fo<0) {
         perror("Can't open device");
         exit(1);
     }
