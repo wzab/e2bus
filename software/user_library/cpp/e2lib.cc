@@ -388,7 +388,10 @@ void i2c_init(E2B::E2BConn &cn, int i2c_base, int wb_freq, int i2c_freq)
     cn.write(i2c_base+1,(div>>8) & 0xff);
     E2B::unique_cmdptr r=cn.write(i2c_base+2,128);
     cn.end_pkt();
-    r->response();
+    E2B::unique_resptr res = r->response();
+    if(r->pkt->status != 0) {
+        throw E2B::E2Bexception("Error in I2C Init");
+    }
     return;
 }
 
@@ -457,7 +460,7 @@ int main(int argc, char **argv)
                 std::cout << "," << std::hex << (*rr2)[i] << ",";
             std::cout << std::endl;
         }
-        i2c_init(cn,0,100000000,100000);
+        i2c_init(cn,0,25000000,100000);
         i2c_wr(cn,0,0x74,0x8);
         std::cout << std::hex;
         auto start = std::chrono::high_resolution_clock::now();

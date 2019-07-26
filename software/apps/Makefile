@@ -1,5 +1,5 @@
 all : e2test e2bus_gw
-CFLAGS += -O3
+CFLAGS += -g -O3
 OBJS1 := e2test.o 
 e2test: $(OBJS1)
 	$(CC) -o e2test $(CFLAGS) $(LDFLAGS) -lzmq -pthread $(OBJS1) 

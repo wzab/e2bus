@@ -35,8 +35,8 @@
 #include <unistd.h>
 
 struct e2b_v1_device_connection dc = {
-    .ifname = "enp3s0f0",
-    .dest_mac = "\x02\x0d\xdb\xa1\x15\x99",
+    .ifname = "eth0",
+    .dest_mac = "\xde\xad\xba\xbe\xbe\xef",
 };
 struct e2b_v1_packet_to_send pts;
 
@@ -47,15 +47,19 @@ int main(int argc, char **argv)
     int n_repeat=200; //number of repetitions
     int16_t fr1=0,fr2=0,fr3=0, fr4=0;
     long frcv,res2;
-    uint8_t a[]="\x01\x12\xa0\x10" //2 zapisy
-                "\xcc\x3c\x45\x2e"
-                "\x45\x23\x43\x15"
-                "\x45\x23\x43\x15" //koniec
-                "\xff\x80\x80\x20" //255 odczytów
-                "\x23\x99\x45\x11" //skąd odczyty
+    uint8_t a[]="\xff\x01\x00\x20" //512 odczytów
+                "\x08\x00\x00\x00" //skąd odczyty
+		"\xff\x01\x00\x20" //512 odczytów
+                "\x09\x00\x00\x00" //skąd odczyty
                 "\xff\xff\xff\xef"; //END
-    uint8_t b[2000];
-    uint8_t a2[]="\x01\x12\xa0\x10" //2 zapisy
+    uint8_t b[5000];
+    uint8_t a2[]="\xff\x01\x00\x20" //512 odczytów
+                "\x09\x00\x00\x00" //skąd odczyty
+		"\xff\x01\x00\x20" //512 odczytów
+                "\x08\x00\x00\x00" //skąd odczyty
+                "\xff\xff\xff\xef"; //END
+    uint8_t b2[5000];
+    uint8_t a2b[]="\x01\x12\xa0\x10" //2 zapisy
                  "\xcc\x3c\x45\x2e"
                  "\x45\x23\x43\x15"
                  "\x45\x23\x43\x15"
@@ -68,7 +72,7 @@ int main(int argc, char **argv)
                  "\x43\x99\x45\x4e"
                  "\x00\x00\x00\x00"
                  "\xff\xff\xff\xef"; //END
-    uint8_t b2[2000];
+    uint8_t b2b[2000];
     uint8_t a3[]="\x01\x12\xa0\x10" //2 zapisy
                  "\xcc\x3c\x45\x2e"
                  "\x45\x23\x43\x15"
@@ -129,15 +133,15 @@ int main(int argc, char **argv)
         pts.resp = b;
         pts.max_resp_len = sizeof(b);
         fr1 = ioctl(fo,E2B_IOC_SEND_ASYNC,&pts);
-        printf("SEND1 returns:%d\n",(int)fr1);
+        //printf("SEND1 returns:%d\n",(int)fr1);
         //Now we prepare for transmission
         pts.cmd = a2;
         pts.cmd_len = sizeof(a2);
         pts.resp = b2;
         pts.max_resp_len = sizeof(b2);
         fr2 = ioctl(fo,E2B_IOC_SEND_ASYNC,&pts);
-        printf("SEND2 returns:%d\n",(int)fr2);
-        //Now we prepare for transmission
+        //printf("SEND2 returns:%d\n",(int)fr2);
+/*        //Now we prepare for transmission
         pts.cmd = a3;
         pts.cmd_len = sizeof(a3);
         pts.resp = b3;
@@ -145,13 +149,13 @@ int main(int argc, char **argv)
         fr3 = ioctl(fo,E2B_IOC_SEND_ASYNC,&pts);
         printf("SEND3 returns:%d\n",(int)fr3);
         //Now we prepare for transmission
-/*        pts.cmd = a4;
+        pts.cmd = a4;
         pts.cmd_len = sizeof(a4);
         pts.resp = b4;
         pts.max_resp_len = sizeof(b4);
         fr4 = ioctl(fo,E2B_IOC_SEND_ASYNC,&pts);
         printf("SEND4 returns:%d\n",(int)fr4);
-*/        printf("waiting for results\n");
+*/        //printf("waiting for results\n");
         while(1) {
             long res=ioctl(fo,E2B_IOC_RECEIVE,1);
             if(res<0) {
@@ -159,24 +163,31 @@ int main(int argc, char **argv)
                 exit(res);
             }
             printf(".");
-            if(comp_mod_2_15(res,fr3)>=0) break;
+            if(comp_mod_2_15(res,fr2)>=0) break;
         }
-        printf("Results from frame 1\n");
-        res2 = *(uint32_t*) b;
-        printf("len=%d\n",res2);
-        for(i=res2-4; i<res2+8; i++) printf("%2.2x,",b[i]);
-        printf("\n");
-        printf("last 4 bytes:");
-        for(i=res2-8; i<res2-4; i++) printf("%2.2x,",b[i]);
-        printf("\n");
-        printf("Results from frame 2\n");
-        res2 = *(uint32_t*) b2;
-        printf("len=%d\n",res2);
-        for(i=res2-4; i<res2+8; i++) printf("%2.2x,",b2[i]);
-        printf("\n");
-        printf("last 4 bytes:");
-        for(i=res2-8; i<res2-4; i++) printf("%2.2x,",b2[i]);
-        printf("\n");
+        //printf("Results from frame 1\n");
+        uint32_t len1 = *(uint32_t*) b;
+        //printf("len=%d\n",len1);
+        uint16_t stat1 = *(uint16_t*)(b+res2-2);
+        //for(i=res2-4; i<res2+8; i++) printf("%2.2x,",b[i]);
+        //printf("\n");
+        //printf("last 4 bytes:");
+        //for(i=res2-8; i<res2-4; i++) printf("%2.2x,",b[i]);
+        //printf("\n");
+        //printf("Results from frame 2\n");
+        uint32_t len2 = *(uint32_t*) b2;
+        //printf("len=%d\n",len2);
+        uint16_t stat2 = *(uint16_t*)(b+res2-2);
+        //for(i=res2-4; i<res2+8; i++) printf("%2.2x,",b2[i]);
+        //printf("\n");
+        //printf("last 4 bytes:");
+        //for(i=res2-8; i<res2-4; i++) printf("%2.2x,",b2[i]);
+        //printf("\n");
+        if((stat1 != 0) || (stat2 != 0) || (len1 != 4104) || (len2 != 4104)) {
+             printf("Error: %x %x\n",(int)stat1,(int)stat2);
+             break;
+	}
+/*
         printf("Results from frame 3\n");
         res2 = *(uint32_t*) b3;
         printf("len=%d\n",res2);
@@ -184,7 +195,7 @@ int main(int argc, char **argv)
         printf("\n");
         printf("last 4 bytes:");
         for(i=res2-8; i<res2-4; i++) printf("%2.2x,",b3[i]);
-        printf("\n");/*
+        printf("\n");
         printf("Results from frame 4\n");
         res2 = *(uint32_t*) b4;
         printf("len=%d\n",res2);

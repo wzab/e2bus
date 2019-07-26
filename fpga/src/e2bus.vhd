@@ -6,7 +6,7 @@
 -- Author     : FPGA Developer  <xl@wzab.nasz.dom>
 -- Company    : 
 -- Created    : 2018-03-15
--- Last update: 2019-07-18
+-- Last update: 2019-07-26
 -- Platform   : 
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -148,6 +148,17 @@ architecture beh_rtl of e2bus is
 
   signal received_peer_mac : std_logic_vector(47 downto 0) := (others => '0');
   signal peer_mac          : std_logic_vector(47 downto 0) := (others => '0');
+
+  -- Signals selected for debugging
+  attribute keep of sys_cmd_frame_ad         : signal is "true";
+  attribute mark_debug of sys_cmd_frame_ad   : signal is "true";
+  attribute keep of sys_cmd_frame_dout       : signal is "true";
+  attribute mark_debug of sys_cmd_frame_dout : signal is "true";
+
+  attribute keep of sys_desc_ad         : signal is "true";
+  attribute mark_debug of sys_desc_ad   : signal is "true";
+  attribute keep of sys_desc_dout       : signal is "true";
+  attribute mark_debug of sys_desc_dout : signal is "true";
 
   -- Components from Core Generator
   component cmd_frm_dpr
@@ -395,7 +406,6 @@ begin  -- architecture beh_rtl
       dinb  => sys_cmd_frame_din,
       doutb => sys_cmd_frame_dout);
 
-
   -- Instantiation of the CMD DESC DPR
 
   cmd_desc_dpr_1 : cmd_desc_dpr
@@ -578,7 +588,10 @@ begin  -- architecture beh_rtl
       request_cmd_frame => '0'
       );
 
-    signal r1, r1_n                   : T_R1_REGS                             := C_R1_REGS_INIT;
+    signal r1, r1_n            : T_R1_REGS := C_R1_REGS_INIT;
+    attribute keep of r1       : signal is "true";
+    attribute mark_debug of r1 : signal is "true";
+
     signal c1                         : T_C1_COMB                             := C_C1_DEFAULT;
     signal fr_tail, frame_to_transmit : unsigned(C_RESP_SYS_FBITS-1 downto 0) := (others => '0');
 
@@ -606,16 +619,18 @@ begin  -- architecture beh_rtl
     attribute mark_debug of resp_busy    : signal is "true";
 
 
-    signal in_transmission  : boolean                                      := false;
-    signal resp_wait        : integer range 0 to 10                        := 0;
-    signal cex_fr_full      : std_logic                                    := '0';
-    signal cex_fr_wr        : std_logic                                    := '0';
-    signal cex_cmd_frame_ad : std_logic_vector(C_CFR_SYS_ABITS-1 downto 0) := (others => '0');
-    signal cex_fr_num       : unsigned(14 downto 0)                        := (others => '0');
-    signal cex_cmd_num      : std_logic_vector(7 downto 0)                 := (others => '0');
-    signal cex_fr_length    : unsigned(15 downto 0)                        := (others => '0');
-    signal cex_exec_start   : std_logic                                    := '0';
-    signal cex_exec_ack     : std_logic                                    := '0';
+    signal in_transmission               : boolean                                      := false;
+    signal resp_wait                     : integer range 0 to 10                        := 0;
+    signal cex_fr_full                   : std_logic                                    := '0';
+    signal cex_fr_wr                     : std_logic                                    := '0';
+    signal cex_cmd_frame_ad              : std_logic_vector(C_CFR_SYS_ABITS-1 downto 0) := (others => '0');
+    signal cex_fr_num                    : unsigned(14 downto 0)                        := (others => '0');
+    signal cex_cmd_num                   : std_logic_vector(7 downto 0)                 := (others => '0');
+    signal cex_fr_length                 : unsigned(15 downto 0)                        := (others => '0');
+    signal cex_exec_start                : std_logic                                    := '0';
+    signal cex_exec_ack                  : std_logic                                    := '0';
+    attribute keep of cex_exec_start     : signal is "true";
+    attribute mark_debug of cex_exec_ack : signal is "true";
 
     signal wb_adr_o   : std_logic_vector(31 downto 0) := (others => '0');
     signal wb_dat_o   : std_logic_vector(31 downto 0) := (others => '0');
@@ -641,7 +656,7 @@ begin  -- architecture beh_rtl
     sys_cmd_frame_ad <= c1.sys_cmd_frame_ad when c1.request_cmd_frame = '1' else cex_cmd_frame_ad;
     cmd_frame_rd_ptr <= r1.cmd_frame_rd_ptr;
     cex_exec_start   <= r1.exec_start;
-    
+
     cmd_exec_1 : entity work.cmd_exec_wb
       port map (
         wb_adr_o      => wb_m2s.adr,

@@ -443,7 +443,7 @@ int main(int argc, char **argv)
         E2B::E2BConn cn(e2gw);
         cn.start(e2gw);
         //cn.errclr();
-        cn.end_pkt();
+        //cn.end_pkt();
         for(int j=0; j<2; j++) {
             cn.write(10,std::vector<uint32_t> {10},1,1);
             std::unique_ptr<E2B::E2CmdRef> r1=cn.read(8,2,1);
@@ -460,7 +460,8 @@ int main(int argc, char **argv)
                 std::cout << "," << std::hex << (*rr2)[i] << ",";
             std::cout << std::endl;
         }
-        i2c_init(cn,0,100000000,100000);
+        //i2c_init(cn,0,50000000,100000); //In Atlys
+        i2c_init(cn,0,25000000,100000); //In Artix 7
         i2c_wr(cn,0,0x27,0x0);
         std::cout << std::hex;
         auto start = std::chrono::high_resolution_clock::now();

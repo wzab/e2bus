@@ -6,7 +6,7 @@
 -- Author     : Wojciech M. Zabolotny  <wzab01@gmail.com>
 -- Company    : 
 -- Created    : 2018-03-10
--- Last update: 2019-07-18
+-- Last update: 2019-07-26
 -- Platform   : 
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -65,22 +65,29 @@ entity cmd_exec_wb is
     rst_p         : in  std_logic;
     -- Clock
     sys_clk       : in  std_logic);
-   
-  
+
+
 end entity cmd_exec_wb;
 
 architecture rtl of cmd_exec_wb is
 
+  attribute keep       : string;
+  attribute mark_debug : string;
+
   --signal s_exec_ack  : std_logic                                     := '0';
   --signal bc_cmd_av   : std_logic                                     := '0';
   --signal bc_cmd_end  : std_logic                                     := '0';
-  signal bc_cmd_ack  : std_logic                                     := '0';
-  signal bc_exec_ack : std_logic                                     := '0';
-  signal bc_cmd_in   : std_logic_vector(31 downto 0)                 := (others => '0');
-  signal bc_resp_out : std_logic_vector(31 downto 0)                 := (others => '0');
-  signal bc_resp_av  : std_logic                                     := '0';
-  signal bc_resp_end : std_logic                                     := '0';
-  signal s_resp_ad   : std_logic_vector(C_RESP_SYS_ABITS-1 downto 0) := (others => '0');
+  signal bc_cmd_ack                   : std_logic                                     := '0';
+  signal bc_exec_ack                  : std_logic                                     := '0';
+  attribute keep of bc_exec_ack       : signal is "true";
+  attribute mark_debug of bc_exec_ack : signal is "true";
+  attribute keep of bc_cmd_ack        : signal is "true";
+  attribute mark_debug of bc_cmd_ack  : signal is "true";
+  signal bc_cmd_in                    : std_logic_vector(31 downto 0)                 := (others => '0');
+  signal bc_resp_out                  : std_logic_vector(31 downto 0)                 := (others => '0');
+  signal bc_resp_av                   : std_logic                                     := '0';
+  signal bc_resp_end                  : std_logic                                     := '0';
+  signal s_resp_ad                    : std_logic_vector(C_RESP_SYS_ABITS-1 downto 0) := (others => '0');
 
   type T_CE1_STATE is (SCE1_IDLE, SCE1_START, SCE1_END, SCE1_DEL1, SCE1_DEL2);
 
@@ -98,7 +105,9 @@ architecture rtl of cmd_exec_wb is
     cmd_frame_ad  => (others => '0')
     );
 
-  signal r, r_n : T_REGS := C_R_INIT;
+  signal r, r_n             : T_REGS := C_R_INIT;
+  attribute keep of r       : signal is "true";
+  attribute mark_debug of r : signal is "true";
 
   type C_COMB is record
     cmd_frame_ad : std_logic_vector(C_CFR_SYS_ABITS-1 downto 0);
@@ -123,7 +132,7 @@ architecture rtl of cmd_exec_wb is
     exec_ack     : std_logic;
     resp_frm_num : unsigned(14 downto 0);
     resp_wrd_ad  : unsigned(7 downto 0);
-    del_cnt  : integer;
+    del_cnt      : integer;
   end record T_CE2_REGS;
 
   constant C_R2_INIT : T_CE2_REGS := (
@@ -133,10 +142,13 @@ architecture rtl of cmd_exec_wb is
     last         => '0',
     resp_frm_num => (others => '0'),
     resp_wrd_ad  => (others => '0'),
-    del_cnt => 0
+    del_cnt      => 0
     );
 
-  signal r2, r2_n : T_CE2_REGS := C_R2_INIT;
+  signal r2, r2_n            : T_CE2_REGS := C_R2_INIT;
+  attribute keep of r2       : signal is "true";
+  attribute mark_debug of r2 : signal is "true";
+
 
   type C2_COMB is record
     resp_wrd_ad : std_logic_vector(7 downto 0);
@@ -277,7 +289,7 @@ begin  -- architecture rtl
     r2_n           <= r2;
     c2             <= C2_DEFAULT;
     c2.resp_wrd_ad <= std_logic_vector(r2.resp_wrd_ad);
-    c2.fr_num <= r2.resp_frm_num;
+    c2.fr_num      <= r2.resp_frm_num;
     case r2.state is
       when S2_IDLE =>
         -- We start with no response frame open
@@ -330,7 +342,7 @@ begin  -- architecture rtl
         if r2.del_cnt = 0 then
           r2_n.state <= S2_IDLE;
         else
-          r2_n.del_cnt <= r2.del_cnt - 1;         
+          r2_n.del_cnt <= r2.del_cnt - 1;
         end if;
       when others => null;
     end case;

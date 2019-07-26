@@ -59,13 +59,13 @@ def transmission_proc(ctx,pkts):
           struct.pack("<L",4*pkt.rlen+16)+\
           struct.pack("<%dL"%len(pkt.cmds),*pkt.cmds)
         e2g_s.send(m)
-        print(m)
-        print("transmitted:" + str([hex(i) for i in m]))
-        print("sent pkt_id="+str(pkt_id)+" len="+str(len(pkt.cmds))+" ")
+        #print(m)
+        #print("transmitted:" + str([hex(i) for i in m]))
+        #print("sent pkt_id="+str(pkt_id)+" len="+str(len(pkt.cmds))+" ")
       if tp[0]==e2g_s:
         #We have received the response vector!
         m=e2g_s.recv()
-        print("received:" + str([hex(i) for i in m]))
+        #print("received:" + str([hex(i) for i in m]))
         (m_frnum,m_id,m_rlen) = struct.unpack("<HHL",m[0:8])
         m_cmd=struct.unpack("<%dL" % (m_rlen/4),m[8:])
         pkt=pkts.pop(m_id)
@@ -117,7 +117,7 @@ class E2pkt(object):
         for i in range(0,4):
           line +=  "\\x%2.2x" % (wrd & 0xff)
           wrd >>= 8
-        print(line)
+        #print(line)
     #We check if the command is not too long
     if len(cmds) > PKT_MAX_LEN:
       raise Exception("Command is too long")

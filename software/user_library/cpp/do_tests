@@ -1,5 +1,5 @@
 #!/bin/bash
-i=0 ; while [ $i -lt 100 ]; do echo "Iteration: ${i}" >> results.txt
+i=0 ; while [ $i -lt 20000 ]; do echo "Iteration: ${i}" >> results.txt
   echo $i
   i=$(( $i + 1 ))
   ./a.out >> results.txt

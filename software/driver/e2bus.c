@@ -237,6 +237,7 @@ static void send_packet(unsigned long sl_as_ul)
         }
         if(should_drop()) {
 			//Randomly drop packet to simulate low quality link
+			pr_alert("#");
 			kfree_skb(newskb);
 		} else {
            dev_queue_xmit(newskb);
@@ -353,6 +354,7 @@ static int e2b_proto_rcv(struct sk_buff *skb, struct net_device *dev,
     //in low quality links)
     if(should_drop()) {
 		kfree_skb(skb);
+     	pr_alert("@");
 		return NET_RX_DROP;
 	}
     // First we try to identify the sender so we search the table of active slaves

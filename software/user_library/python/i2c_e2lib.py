@@ -53,4 +53,9 @@ e2b.end_pkt()
 v1=r1.read_values()
 v2=r2.read_values()
 print([hex(i) for i in v1])
-
+# Should we run the stress test?
+if True:
+   for i in range(0,100000):
+     i2c_wr(0x74,8)
+     t=i2c_rd(0x5d)
+     print i
