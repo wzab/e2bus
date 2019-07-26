@@ -9,6 +9,7 @@
 #include <assert.h>
 #include <zmq.h>
 #include <pthread.h>
+#include <semaphore.h> 
 #include <endian.h>
 #include "e2bus.h"
 
@@ -53,12 +54,14 @@ void * serve_irqs(void * sv);
 void * serve_cmds(void * sv);
 void *ctx = NULL;
 
+sem_t queue_lock;
 
 void main(int argc, char * argv[])
 {
     pthread_t thr_irqs;
     pthread_t thr_cmds;
     int res;
+    sem_init(&queue_lock,0,1);
     ctx=zmq_ctx_new ();
     assert (ctx);
     //Here we first connect to our device
@@ -168,8 +171,13 @@ void * serve_cmds(void * sv)
                 pts.resp = (uint8_t *) &e2resp->resp.dta[0]; // ! To be completed
                 pts.max_resp_len = e2req->maxrlen;
                 // Submit the request object
-                fr_num = ioctl(fo,E2B_IOC_SEND_ASYNC,&pts);
-                // Write the assigned number to the response object
+                sem_wait(&queue_lock);
+                {
+                   int res = ioctl(fo,E2B_IOC_SEND_ASYNC,&pts);
+                   if(res < 0) printf("IOC_ASYNC<0: %d\n",res);
+                   fr_num = res;
+                }
+                // Write the assigned number to the response object                
                 e2resp->resp.id = fr_num;
                 e2resp->resp.req_id = e2req->id;
                 // Put the request object on the list
@@ -185,13 +193,17 @@ void * serve_cmds(void * sv)
                     resp_head->next = e2resp;
                 }
                 resp_head = e2resp;
+                printf("submitted %d \n",fr_num);
+                sem_post(&queue_lock);
                 // Shouldn't we confirm acceptation of the object?
                 //    zmq_send....
             }
             if(pits[1].revents) {
                 /* We have certains reponses ready */
+                sem_wait(&queue_lock);
                 long r2 = ioctl(fo,E2B_IOC_RECEIVE,0);
-                //printf("received:%d\n",r2);
+                sem_post(&queue_lock);
+                printf("received:%d\n",r2);
                 /* Now we can scan the list until we find the last serviced */
                 while(1) {
                     //We should check that the list is not empty
@@ -199,14 +211,19 @@ void * serve_cmds(void * sv)
                     //We get the object from the list
 
                     uint32_t to_send;
+                    sem_wait(&queue_lock);
                     e2b_resp_obj_t * e2resp = resp_tail;
+                    sem_post(&queue_lock);
                     if(e2resp == NULL) {
+                        printf("Break due to empty list\n");
                         break; //No more elements in list (so head should be also NULL, who warrants that?)
                     }
                     //Now check if the number is OK
                     if(comp_mod_2_15(e2resp->resp.id,r2)>0) {
+                        printf("Will be serviced later\n");
                         break; //This element is not to be serviced now!
                     }
+                    printf("id: %d,",e2resp->resp.id);
                     //Here we process the element
                     //Extract the length from the first word
                     to_send = e2resp->resp.dta[0]; //Length is in bytes, it is stored by the driver in native endianness!!!
@@ -220,12 +237,14 @@ void * serve_cmds(void * sv)
 
                     msize=zmq_send(socket,&e2resp->resp, to_send+2*sizeof(uint16_t)+sizeof(uint32_t),0);
                     //Now we take it off the list
+                    sem_wait(&queue_lock);
                     resp_tail = e2resp->next;
                     if(resp_tail) {
                         resp_tail->prev = NULL;
                     } else {
                         resp_head = NULL;
                     }
+		    sem_post(&queue_lock);
                     //Now we can free the object
                     free(e2resp);
                 }
