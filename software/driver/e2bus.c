@@ -51,10 +51,10 @@ static unsigned long loss_threshold = 0;
 
 static inline int should_drop(void)
 {
-	unsigned long rval;
-	if(loss_threshold==0) return 0;
-	rval = (unsigned long) get_random_long();
-	return rval < loss_threshold;
+    unsigned long rval;
+    if(loss_threshold==0) return 0;
+    rval = (unsigned long) get_random_long();
+    return rval < loss_threshold;
 };
 
 typedef struct {
@@ -236,12 +236,12 @@ static void send_packet(unsigned long sl_as_ul)
             return;
         }
         if(should_drop()) {
-			//Randomly drop packet to simulate low quality link
-			pr_alert("#");
-			kfree_skb(newskb);
-		} else {
-           dev_queue_xmit(newskb);
-	    }
+            //Randomly drop packet to simulate low quality link
+            pr_alert("#");
+            kfree_skb(newskb);
+        } else {
+            dev_queue_xmit(newskb);
+        }
     } else {
         //pr_alert("in send packet - nothing to send");
         kfree_skb(newskb);
@@ -297,7 +297,7 @@ static void handle_responses(unsigned long sl_as_ul)
 #ifdef E2B_DEBUG
             pr_alert("last packet - entry");
 #endif
-			//We remember that data in BUF are LE!
+            //We remember that data in BUF are LE!
             cs->status_and_pos = le32_to_cpu(*(uint32_t *) &rs->buf[rs->pos + rs->len - 4]);
             * (uint32_t *)cs->rbuf = cs->resp_len; //Store the length with native endianness!!!
             //Mark packet as completed!
@@ -353,10 +353,10 @@ static int e2b_proto_rcv(struct sk_buff *skb, struct net_device *dev,
     //First check if the packet should be randomly dropped (for testing of protocol
     //in low quality links)
     if(should_drop()) {
-		kfree_skb(skb);
-     	pr_alert("@");
-		return NET_RX_DROP;
-	}
+        kfree_skb(skb);
+        pr_alert("@");
+        return NET_RX_DROP;
+    }
     // First we try to identify the sender so we search the table of active slaves
     // When we receive the packet, we don't know with which slave it is associated
     // Therefore we need to find the right slave. (to be copied from FADE)
@@ -500,8 +500,8 @@ static int e2b_proto_rcv(struct sk_buff *skb, struct net_device *dev,
         sl->resp_slots[slot].time_stamp2 = time_stamp2;
         sl->resp_slots[slot].confirm = 1;
         if(sl->active)
-	    send_pkt = 1;
-            //tasklet_hi_schedule(&sl->send_task);
+            send_pkt = 1;
+        //tasklet_hi_schedule(&sl->send_task);
     } else if (cres>0) {
         //Frame in the slot is newer then the delivered
         //it should not happen! Protocol error?
@@ -886,6 +886,7 @@ long e2b_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         netdev = dev_get_by_name(&init_net, dc.ifname);
         if (!netdev) {
             dev_alert(sd->dev,"Couldn't get network device:%s in E2B_IOC_OPEN",dc.ifname);
+            sd->netdev = NULL;
             return -ENODEV;
         }
         sd->netdev = netdev;
@@ -962,6 +963,8 @@ long e2b_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         long res,res2;
         void *src = (void *)arg;
         struct e2b_v1_packet_to_send pts;
+        if(!sd->active) return -ENODEV;
+        if(!sd->netdev) return -ENODEV;
         if (!access_ok(VERIFY_READ, src, sizeof(pts))) {
             return -EFAULT;
         } else {
@@ -1066,6 +1069,8 @@ error_ioctl_async1:
         long res2=0;
         uint16_t cfrnum = sd->cmd_num_to_receive;
         int cslot = cfrnum  & E2B_CMD_SLOTS_MASK;
+        if(!sd->active) return -ENODEV;
+        if(!sd->netdev) return -ENODEV;
         cmd_slot * cs = &sd->cmd_slots[cslot];
         // @!@ TO BE DONE !!!
         //And finally we sleep interruptible waiting until the
@@ -1102,6 +1107,8 @@ error_ioctl_async1:
         long res,res2;
         void *src = (void *)arg;
         struct e2b_v1_packet_to_send pts;
+        if(!sd->active) return -ENODEV;
+        if(!sd->netdev) return -ENODEV;
         if (!access_ok(VERIFY_READ, src, sizeof(pts))) {
             return -EFAULT;
         } else {
@@ -1271,10 +1278,10 @@ static int e2b_init(void)
     printk(KERN_ALERT "Welcome to e2bus driver\n");
     /* Initialize the loss threshold used for testing */
     if(loss_level) {
-		loss_threshold = ULONG_MAX/loss_level;
-	} else {
-		loss_threshold = 0;
-	}
+        loss_threshold = ULONG_MAX/loss_level;
+    } else {
+        loss_threshold = 0;
+    }
     /* Create the table for slave devices */
     slave_table = kzalloc(sizeof(slave_data)*max_slaves, GFP_KERNEL);
     if (!slave_table) {
