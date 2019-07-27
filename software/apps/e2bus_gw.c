@@ -9,7 +9,7 @@
 #include <assert.h>
 #include <zmq.h>
 #include <pthread.h>
-#include <semaphore.h> 
+#include <semaphore.h>
 #include <endian.h>
 #include "e2bus.h"
 
@@ -18,7 +18,8 @@ int fo;
 
 struct e2b_v1_device_connection dc = {
     .ifname = "eth0",
-    .dest_mac = "\xde\xad\xba\xbe\xbe\xef",
+    //.ifname = "enp3s0f1",
+    .dest_mac = "\x0e\x68\x61\x2d\xd4\x7e",
 };
 struct e2b_v1_packet_to_send pts;
 
@@ -82,14 +83,14 @@ void main(int argc, char * argv[])
     //Then we start both threads
     res = pthread_create(&thr_irqs,NULL,serve_irqs,NULL);
     if(res) {
-      perror("I can't create the IRQ thread");
-      exit(2);
+        perror("I can't create the IRQ thread");
+        exit(2);
     }
     res = pthread_create(&thr_cmds,NULL,serve_cmds,NULL);
     if(res) {
-      perror("I can't create the CMD thread");
-      exit(2);
-    }    
+        perror("I can't create the CMD thread");
+        exit(2);
+    }
     //Finally we can wait for them?
     pthread_join(thr_irqs,NULL);
     pthread_join(thr_cmds,NULL);
@@ -174,11 +175,11 @@ void * serve_cmds(void * sv)
                 pts.max_resp_len = e2req->maxrlen;
                 // Submit the request object
                 {
-                   int res = ioctl(fo,E2B_IOC_SEND_ASYNC,&pts);
-                   if(res < 0) printf("IOC_ASYNC<0: %d\n",res);
-                   fr_num = res;
+                    int res = ioctl(fo,E2B_IOC_SEND_ASYNC,&pts);
+                    if(res < 0) printf("IOC_ASYNC<0: %d\n",res);
+                    fr_num = res;
                 }
-                // Write the assigned number to the response object                
+                // Write the assigned number to the response object
                 e2resp->resp.id = fr_num;
                 e2resp->resp.req_id = e2req->id;
                 // Put the request object on the list
@@ -245,7 +246,7 @@ void * serve_cmds(void * sv)
                     } else {
                         resp_head = NULL;
                     }
-		    sem_post(&queue_lock);
+                    sem_post(&queue_lock);
                     //Now we can free the object
                     free(e2resp);
                 }

@@ -36,7 +36,8 @@
 
 struct e2b_v1_device_connection dc = {
     .ifname = "eth0",
-    .dest_mac = "\xde\xad\xba\xbe\xbe\xef",
+    //.ifname = "enp3s0f1",
+    .dest_mac = "\x0e\x68\x61\x2d\xd4\x7e",
 };
 struct e2b_v1_packet_to_send pts;
 
