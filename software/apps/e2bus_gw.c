@@ -144,6 +144,7 @@ void * serve_cmds(void * sv)
         if(res > 0) {
             if(pits[0].revents) {
                 /*  We have received an E2Bus request */
+                sem_wait(&queue_lock);
                 msize = zmq_recv (socket,rbuf,2000, 0);
                 //Cast it to the e2b_req pointer
                 e2b_req_t * e2req = (e2b_req_t *) rbuf;
@@ -166,12 +167,12 @@ void * serve_cmds(void * sv)
                 if(!e2resp) {
                     // But what we can do if not? We should send NACK?
                     fprintf(stderr,"I can't allocate the buffer for the response\n");
+                    sem_post(&queue_lock);
                     exit(10);
                 }
                 pts.resp = (uint8_t *) &e2resp->resp.dta[0]; // ! To be completed
                 pts.max_resp_len = e2req->maxrlen;
                 // Submit the request object
-                sem_wait(&queue_lock);
                 {
                    int res = ioctl(fo,E2B_IOC_SEND_ASYNC,&pts);
                    if(res < 0) printf("IOC_ASYNC<0: %d\n",res);
