@@ -145,10 +145,10 @@ begin  -- beh
   -- with multiple boards!
   with switches(1 downto 0) select
     my_mac <=
-    x"de_ad_ba_be_be_ef" when "00",
-    x"de_ad_ba_be_be_e1" when "01",
-    x"de_ad_ba_be_be_e2" when "10",
-    x"de_ad_ba_be_be_e3" when "11";
+    x"0e_68_61_2d_d4_7e" when "00",
+    x"0e_68_61_2d_d4_7e" when "01",
+    x"0e_68_61_2d_d4_7e" when "10",
+    x"0e_68_61_2d_d4_7e" when "11";
 
   irqs(3 downto 0) <= btn;
 

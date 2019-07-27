@@ -133,7 +133,7 @@ architecture beh of a7sb_e2bus is
   signal rmii2mac_rx_dv  : std_logic;
   signal rmii2mac_rx_er  : std_logic;
   signal rmii2mac_rxd    : std_logic_vector(3 downto 0);
-  signal my_mac          : std_logic_vector(47 downto 0) := x"de_ad_ba_be_be_ef";
+  signal my_mac          : std_logic_vector(47 downto 0) := x"0e_68_61_2d_d4_7e";
   signal peer_mac        : std_logic_vector(47 downto 0) :=
     -- x"14_fe_b5_c5_bc_7c";
     -- x"d8_cb_8a_1d_ab_e5";
