@@ -194,7 +194,7 @@ void * serve_cmds(void * sv)
                     resp_head->next = e2resp;
                 }
                 resp_head = e2resp;
-                printf("submitted %d \n",fr_num);
+                //printf("submitted %d \n",fr_num);
                 sem_post(&queue_lock);
                 // Shouldn't we confirm acceptation of the object?
                 //    zmq_send....
@@ -204,7 +204,7 @@ void * serve_cmds(void * sv)
                 sem_wait(&queue_lock);
                 long r2 = ioctl(fo,E2B_IOC_RECEIVE,0);
                 sem_post(&queue_lock);
-                printf("received:%d\n",r2);
+                //printf("received:%d\n",r2);
                 /* Now we can scan the list until we find the last serviced */
                 while(1) {
                     //We should check that the list is not empty
@@ -216,15 +216,15 @@ void * serve_cmds(void * sv)
                     e2b_resp_obj_t * e2resp = resp_tail;
                     sem_post(&queue_lock);
                     if(e2resp == NULL) {
-                        printf("Break due to empty list\n");
+                        //printf("Break due to empty list\n");
                         break; //No more elements in list (so head should be also NULL, who warrants that?)
                     }
                     //Now check if the number is OK
                     if(comp_mod_2_15(e2resp->resp.id,r2)>0) {
-                        printf("Will be serviced later\n");
+                        //printf("Will be serviced later\n");
                         break; //This element is not to be serviced now!
                     }
-                    printf("id: %d,",e2resp->resp.id);
+                    //printf("id: %d,",e2resp->resp.id);
                     //Here we process the element
                     //Extract the length from the first word
                     to_send = e2resp->resp.dta[0]; //Length is in bytes, it is stored by the driver in native endianness!!!
