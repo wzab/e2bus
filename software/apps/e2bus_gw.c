@@ -48,8 +48,8 @@ typedef struct e2b_resp_obj {
 } e2b_resp_obj_t;
 
 //Request list pointers
-e2b_resp_obj_t * resp_head = NULL;
-e2b_resp_obj_t * resp_tail = NULL;
+e2b_resp_obj_t * volatile resp_head = NULL;
+e2b_resp_obj_t * volatile resp_tail = NULL;
 void * serve_irqs(void * sv);
 void * serve_cmds(void * sv);
 void *ctx = NULL;
