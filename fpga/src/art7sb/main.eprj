@@ -1,3 +1,7 @@
 include ip_art7sb
 vhdl work a7sb_eth_top.vhd
 xdc pins.xdc
+xdc timing.xdc
+xdc target.xdc
+target constrs_1
+
