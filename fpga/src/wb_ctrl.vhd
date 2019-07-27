@@ -6,7 +6,7 @@
 -- Author     : Wojciech M. Zabolotny  <wzab01@gmail.com>
 -- Company    : 
 -- Created    : 2018-03-10
--- Last update: 2019-07-18
+-- Last update: 2019-07-27
 -- Platform   : 
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -67,6 +67,9 @@ entity wb_ctrl is
 end entity wb_ctrl;
 
 architecture rtl of wb_ctrl is
+
+  attribute keep       : string;
+  attribute mark_debug : string;
 
   constant C_STATUS_LEN : integer := 16;
 
@@ -209,11 +212,11 @@ architecture rtl of wb_ctrl is
     return boolean is
     variable res : boolean := false;
   begin  -- function wrcmd_dm
-     if cmd(19) = '1' then
-       res := true;
-     else
-        res := false;
-     end if;
+    if cmd(19) = '1' then
+      res := true;
+    else
+      res := false;
+    end if;
     return res;
   end function rmwcmd_resp;
 
@@ -248,12 +251,12 @@ architecture rtl of wb_ctrl is
   end function rtstcmd_repeat;
 
   type T_SBC_STATE is (SBC_IDLE, SBC_START, SBC_WRITE0, SBC_READ0, SBC_RMW0,
-                       SBC_RTST0, SBC_RTST1, SBC_RTST2, SBC_RTST3,
-                       SBC_MRTST0, SBC_MRTST1, SBC_MRTST2, SBC_MRTST3,
+                       SBC_RTST0, SBC_RTST1, SBC_RTST2, SBC_RTST3, SBC_RTST4,
+                       SBC_MRTST0, SBC_MRTST1, SBC_MRTST2, SBC_MRTST3, SBC_MRTST4, SBC_MRTST5,
                        SBC_DELAY,
-                       SBC_WRITE1, SBC_WRITE2, SBC_WRITE3, SBC_END,
-                       SBC_READ1, SBC_READ2,
-                       SBC_RMW1, SBC_RMW2, SBC_RMW3, SBC_RMW4);
+                       SBC_WRITE1, SBC_WRITE2, SBC_WRITE3, SBC_END, SBC_END2,
+                       SBC_READ1, SBC_READ1b, SBC_READ2,
+                       SBC_RMW1, SBC_RMW2, SBC_RMW3, SBC_RMW4, SBC_RMW5);
   type T_SBC_REGS is record
     state     : T_SBC_STATE;
     command   : std_logic_vector(31 downto 0);
@@ -262,6 +265,8 @@ architecture rtl of wb_ctrl is
     wreg      : std_logic_vector(31 downto 0);
     wreg2     : std_logic_vector(31 downto 0);
     delay_cnt : unsigned(31 downto 0);
+    resp_dout : std_logic_vector(31 downto 0);
+    resp_av   : std_logic;
     wb_stb_o  : std_logic;
     wb_cyc_o  : std_logic;
     wb_we_o   : std_logic;
@@ -280,6 +285,8 @@ architecture rtl of wb_ctrl is
     wreg      => (others => '0'),
     wreg2     => (others => '0'),
     delay_cnt => (others => '0'),
+    resp_dout => (others => '0'),
+    resp_av   => '0',
     wb_stb_o  => '0',
     wb_cyc_o  => '0',
     wb_we_o   => '0',
@@ -291,24 +298,20 @@ architecture rtl of wb_ctrl is
     );
 
   type T_SBC_COMB is record
-    cmd_ack   : std_logic;
-    cmd_err   : std_logic;
-    resp_dout : std_logic_vector(31 downto 0);
-    resp_av   : std_logic;
-    resp_end  : std_logic;
+    cmd_ack  : std_logic;
+    resp_end : std_logic;
   end record T_SBC_COMB;
 
   constant C_SBC_COMB_DEFAULT : T_SBC_COMB := (
-    cmd_ack   => '0',
-    cmd_err   => '0',
-    resp_dout => (others => '0'),
-    resp_av   => '0',
-    resp_end  => '0'
+    cmd_ack  => '0',
+    resp_end => '0'
     );
 
-  signal r, r_n          : T_SBC_REGS := C_SBC_REGS_INIT;
-  signal c               : T_SBC_COMB := C_SBC_COMB_DEFAULT;
-  signal exec_start_sync : std_logic  := '0';
+  signal r, r_n             : T_SBC_REGS := C_SBC_REGS_INIT;
+  attribute keep of r       : signal is "true";
+  attribute mark_debug of r : signal is "true";
+  signal c                  : T_SBC_COMB := C_SBC_COMB_DEFAULT;
+  signal exec_start_sync    : std_logic  := '0';
 
 begin  -- architecture rtl
 
@@ -318,9 +321,9 @@ begin  -- architecture rtl
   wb_cyc_o <= r.wb_cyc_o;
   wb_we_o  <= r.wb_we_o;
   wb_sel_o <= (others => '1');
-  
-  resp_av  <= c.resp_av;
-  resp_out <= c.resp_dout;
+
+  resp_av  <= r.resp_av;
+  resp_out <= r.resp_dout;
   resp_end <= c.resp_end;
 
   cmd_ack  <= c.cmd_ack;
@@ -356,7 +359,6 @@ begin  -- architecture rtl
     procedure set_error (
       constant code : in integer) is
     begin  -- procedure set_error
-      c.cmd_err    <= '1';
       r_n.status   <= to_unsigned(code, C_STATUS_LEN);
       -- remember, that we are in error state
       r_n.in_error <= true;
@@ -499,16 +501,19 @@ begin  -- architecture rtl
         -- Wait for end of the cycle (we do not support wb_rty_i (yet?))
         if wb_ack_i = '1' then
           -- Cycle ended normally and we can read the data
-          c.resp_dout <= wb_dat_i;
-          c.resp_av   <= '1';
-          -- Wait until data is accepted
-          if resp_ack = '1' then
-            stop_all;
-            r_n.state <= SBC_READ2;
-          end if;
+          r_n.resp_dout <= wb_dat_i;
+          r_n.resp_av   <= '1';
+          stop_all;
+          r_n.state     <= SBC_READ1b;
         elsif wb_err_i = '1' then
           stop_all;
           set_error(8);
+        end if;
+      when SBC_READ1b =>
+        -- Wait until data is accepted
+        if resp_ack = '1' then
+          r_n.resp_av <= '0';
+          r_n.state   <= SBC_READ2;
         end if;
       when SBC_READ2 =>
         if to_integer(r.cycle_cnt) /= 0 then
@@ -591,18 +596,21 @@ begin  -- architecture rtl
           stop_all;
           if rmwcmd_resp(r.command) then
             -- Cycle ended normally and we can write the original data
-            c.resp_dout <= r.wreg;
-            c.resp_av   <= '1';
-            -- Wait until data is accepted
-            if resp_ack = '1' then
-              r_n.state <= SBC_START;
-            end if;
+            r_n.resp_dout <= r.wreg;
+            r_n.resp_av   <= '1';
+            r_n.state     <= SBC_RMW5;
           else
             r_n.state <= SBC_START;
           end if;
         elsif wb_err_i = '1' then
           stop_all;
           set_error(12);
+        end if;
+      when SBC_RMW5 =>
+        -- Wait until data is accepted
+        if resp_ack = '1' then
+          r_n.resp_av <= '0';
+          r_n.state   <= SBC_START;
         end if;
       when SBC_RTST0 =>
         if cmd_av = '1' then
@@ -707,13 +715,18 @@ begin  -- architecture rtl
             r_n.state <= SBC_START;
           else
             -- Test failed, we need to write the read value
-            c.resp_dout <= wb_dat_i;
-            c.resp_av   <= '1';
-            -- Wait until data is accepted
-            if resp_ack = '1' then
-              set_error(verror);
-            end if;
+            r_n.resp_dout <= wb_dat_i;
+            r_n.resp_av   <= '1';
+            set_error(verror);
+            -- We overwrite the change of state done by set_error!
+            r_n.state     <= SBC_RTST4;
           end if;
+        end if;
+      when SBC_RTST4 =>
+        -- Wait until data is accepted
+        if resp_ack = '1' then
+          r_n.resp_av <= '0';
+          r_n.state   <= SBC_END;
         end if;
       when SBC_MRTST0 =>
         if cmd_av = '1' then
@@ -818,13 +831,10 @@ begin  -- architecture rtl
             -- Test executed correctly
             stop_all;
             -- Write the loop counter;
-            c.resp_dout                    <= (others => '0');
-            c.resp_dout(r.cycle_cnt'range) <= std_logic_vector(r.cycle_cnt);
-            c.resp_av                      <= '1';
-            -- Wait until data is accepted
-            if resp_ack = '1' then
-              r_n.state <= SBC_START;
-            end if;
+            r_n.resp_dout                    <= (others => '0');
+            r_n.resp_dout(r.cycle_cnt'range) <= std_logic_vector(r.cycle_cnt);
+            r_n.resp_av                      <= '1';
+            r_n.state                        <= SBC_MRTST5;
           else
             -- Test failed
             if to_integer(r.cycle_cnt) /= 0 then
@@ -836,14 +846,25 @@ begin  -- architecture rtl
               r_n.state     <= SBC_DELAY;
             else
               --we need to write the read value
-              c.resp_dout <= wb_dat_i;
-              c.resp_av   <= '1';
-              -- Wait until data is accepted
-              if resp_ack = '1' then
-                set_error(verror);
-              end if;
+              r_n.resp_dout <= wb_dat_i;
+              r_n.resp_av   <= '1';
+              set_error(verror);
+              -- We overwrite the change of the state done by set_error!
+              r_n.state     <= SBC_MRTST4;
             end if;
           end if;
+        end if;
+      when SBC_MRTST4 =>
+        -- Wait until data is accepted
+        if resp_ack = '1' then
+          r_n.resp_av <= '0';
+          r_n.state   <= SBC_END;
+        end if;
+      when SBC_MRTST5 =>
+        -- Wait until data is accepted
+        if resp_ack = '1' then
+          r_n.resp_av <= '0';
+          r_n.state   <= SBC_START;
         end if;
       when SBC_DELAY =>
         if to_integer(r.delay_cnt) > 0 then
@@ -856,11 +877,14 @@ begin  -- architecture rtl
         -- Set the bus in inactive state
         stop_all;
         -- We immediately end servicing of the command
-        c.resp_dout <= std_logic_vector(r.status) & std_logic_vector(to_unsigned(to_integer(r.cmd_cnt), 16));
-        c.resp_av   <= '1';
-        c.resp_end  <= '1';
+        r_n.resp_dout <= std_logic_vector(r.status) & std_logic_vector(to_unsigned(to_integer(r.cmd_cnt), 16));
+        r_n.resp_av   <= '1';
+        r_n.state     <= SBC_END2;
+      when SBC_END2 =>
+        c.resp_end <= '1';
         -- Wait until data is accepted
         if resp_ack = '1' then
+          r_n.resp_av  <= '0';
           r_n.exec_ack <= exec_start_sync;
           r_n.state    <= SBC_IDLE;
         end if;
