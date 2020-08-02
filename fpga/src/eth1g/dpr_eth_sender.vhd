@@ -221,6 +221,7 @@ begin  -- beh1
                   snd_resp_req_sync, snd_resp_start,
                   snd_resp_time)
     variable v_TxD : std_logic_vector(7 downto 0);
+	 variable bit_sel : integer;
   begin  -- process snd1
     -- default values
     c   <= ETH_SENDER_COMB_DEFAULT;
@@ -263,7 +264,8 @@ begin  -- beh1
       when WST_SEND_PEER_MAC_0 =>
         -- Here we send the header and we decide whether we send the
         -- acknowledgements only or also the response
-        v_TxD       := peer_mac(r.count*8-1 downto (r.count-1)*8);
+		  bit_sel := (r.count-1)*8;
+        v_TxD       := peer_mac((bit_sel + 7) downto bit_sel);
         c.TxD       <= v_TxD;
         c.Tx_En     <= '1';
         r_n.pkt_len <= r.pkt_len + 1;
@@ -277,7 +279,8 @@ begin  -- beh1
       when WST_SEND_MY_MAC_0 =>
         -- Here we send the header and we decide whether we send the
         -- acknowledgements only or also the response
-        v_TxD       := my_mac(r.count*8-1 downto (r.count-1)*8);
+		  bit_sel := (r.count-1)*8;
+        v_TxD       := my_mac((bit_sel+7) downto bit_sel);
         c.TxD       <= v_TxD;
         c.Tx_En     <= '1';
         r_n.pkt_len <= r.pkt_len + 1;
@@ -291,7 +294,8 @@ begin  -- beh1
       when WST_SEND_PROTO_0 =>
         -- Here we send the header and we decide whether we send the
         -- acknowledgements only or also the response
-        v_TxD       := proto_id(r.count*8-1 downto (r.count-1)*8);
+  		  bit_sel := (r.count-1)*8;
+        v_TxD       := proto_id((bit_sel+7) downto bit_sel);
         c.TxD       <= v_TxD;
         c.Tx_En     <= '1';
         r_n.pkt_len <= r.pkt_len + 1;
