@@ -7,7 +7,7 @@
 -- License    : BSD License
 -- Company    : 
 -- Created    : 2010-08-03
--- Last update: 2020-08-02
+-- Last update: 2020-08-03
 -- Platform   : 
 -- Standard   : VHDL
 -------------------------------------------------------------------------------
@@ -35,9 +35,9 @@ library pll1;
 entity de0_e2bus is
 
   port (
-    cpu_reset      : in    std_logic;
-    btn            : in    std_logic_vector(3 downto 0);
-    switches       : in    std_logic_vector(7 downto 0);
+    not_cpu_reset  : in    std_logic;
+    btn            : in    std_logic_vector(0 downto 0);
+    switches       : in    std_logic_vector(3 downto 0);
     gpio_led       : out   std_logic_vector(7 downto 0);
     -- I2C interface
     i2c_scl        : inout std_logic;
@@ -45,10 +45,10 @@ entity de0_e2bus is
     -- PHY interface
     phy_col        : in    std_logic;
     phy_crs        : in    std_logic;
-    phy_int        : in    std_logic;
+    --phy_int        : in    std_logic;
     phy_mdc        : out   std_logic;
     phy_mdio       : inout std_logic;
-    phy_reset      : out   std_logic;
+    phy_reset_n    : out   std_logic;
     phy_rxclk      : in    std_logic;
     phy_rxctl_rxdv : in    std_logic;
     phy_rxd        : in    std_logic_vector(7 downto 0);
@@ -104,7 +104,7 @@ architecture beh of de0_e2bus is
   signal restart : std_logic;
 
   signal nwr, nrd, rst_n, dcm_locked : std_logic;
-  signal not_cpu_reset, rst_del      : std_logic;
+  signal cpu_reset, rst_del          : std_logic;
 
   signal tx_valid : std_logic                    := '0';
   signal tx_last  : std_logic                    := '0';
@@ -151,9 +151,10 @@ begin  -- beh
     x"0e_68_61_2d_d4_7e" when "10",
     x"0e_68_61_2d_d4_7e" when "11";
 
-  irqs(3 downto 0) <= btn;
+  irqs(0)          <= not btn(0);
+  irqs(3 downto 1) <= (others => '0');
 
-  not_cpu_reset <= not cpu_reset;
+  cpu_reset <= not not_cpu_reset;
 
 
   tx_clk <= Clk_125M;
@@ -185,7 +186,7 @@ begin  -- beh
       outclk_0 => Clk_125M,
       outclk_1 => Clk_user,
       outclk_2 => Clk_reg,
-      rst      => not_cpu_reset,
+      rst      => cpu_reset,
       locked   => dcm_locked);
 
   -- Delay RX signals to improve timing
@@ -200,7 +201,7 @@ begin  -- beh
 
   process (Clk_user, not_cpu_reset)
   begin  -- process
-    if not_cpu_reset = '1' then         -- asynchronous reset (active low)
+    if not_cpu_reset = '0' then         -- asynchronous reset (active low)
       rst_n   <= '0';
       rst_del <= '0';
     elsif Clk_user'event and Clk_user = '1' then  -- rising clock edge
@@ -230,7 +231,7 @@ begin  -- beh
 
   -- reset
 
-  phy_reset <= rst_n;
+  phy_reset_n <= rst_n;
 
   -- Connection of MDI
   --s_Mdi    <= PHY_MDIO;
