@@ -725,7 +725,7 @@ static int prepare_gup(struct e2b_v1_packet_to_send * pts, cmd_slot * cs)
     void * vbuf = NULL;
     void * vresp = NULL;
     //Now make sure, that we will be able to write the response
-    if (!access_ok(VERIFY_WRITE, pts->resp, pts->max_resp_len)) {
+    if (!access_ok(pts->resp, pts->max_resp_len)) {
         pr_alert("GUP wrong access");
         res = -EFAULT;
         goto error_prep_gup_1;
@@ -870,7 +870,7 @@ long e2b_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         struct net_device *netdev;
         void *src = (void *)arg;
         struct e2b_v1_device_connection dc;
-        if (!access_ok(VERIFY_READ, src, sizeof(dc))) {
+        if (!access_ok(src, sizeof(dc))) {
             dev_alert(sd->dev,"Wrong permissions in E2B_IOC_OPEN");
             return -EFAULT;
         } else {
@@ -965,7 +965,7 @@ long e2b_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         struct e2b_v1_packet_to_send pts;
         if(!sd->active) return -ENODEV;
         if(!sd->netdev) return -ENODEV;
-        if (!access_ok(VERIFY_READ, src, sizeof(pts))) {
+        if (!access_ok(src, sizeof(pts))) {
             return -EFAULT;
         } else {
             res2 = __copy_from_user(&pts, src, sizeof(pts));
@@ -1002,7 +1002,7 @@ long e2b_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 #endif
         //mdelay(10);
         //Copy the command list to that buffer
-        if (!access_ok(VERIFY_READ, pts.cmd, pts.cmd_len)) {
+        if (!access_ok( pts.cmd, pts.cmd_len)) {
             res = -EFAULT;
             goto error_ioctl_async1;
         } else {
@@ -1109,7 +1109,7 @@ error_ioctl_async1:
         struct e2b_v1_packet_to_send pts;
         if(!sd->active) return -ENODEV;
         if(!sd->netdev) return -ENODEV;
-        if (!access_ok(VERIFY_READ, src, sizeof(pts))) {
+        if (!access_ok( src, sizeof(pts))) {
             return -EFAULT;
         } else {
             res2 = __copy_from_user(&pts, src, sizeof(pts));
@@ -1146,7 +1146,7 @@ error_ioctl_async1:
 #endif
         //mdelay(10);
         //Copy the command list to that buffer
-        if (!access_ok(VERIFY_READ, pts.cmd, pts.cmd_len)) {
+        if (!access_ok(pts.cmd, pts.cmd_len)) {
             res = -EFAULT;
             goto error_ioctl_open1;
         } else {
