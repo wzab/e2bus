@@ -7,7 +7,7 @@
 -- License    : Dual LGPL/BSD License
 -- Company    : 
 -- Created    : 2014-11-10
--- Last update: 2020-08-15
+-- Last update: 2020-08-16
 -- Platform   : 
 -- Standard   : VHDL'93
 -------------------------------------------------------------------------------
@@ -395,12 +395,10 @@ begin  -- beh1
           if RxD_0 /= x"ff" then
             r_n.not_broadcast <= '1';
           end if;
-          if my_mac(47-r.count*8 downto 40-r.count*8) /= RxD_0 then
-            -- Not our address, but it may be broadcast
-            if (RxD_0 /= x"ff") or (r.not_broadcast = '1') then
-              -- It is not a broadcast either, so go to IDLE
+          if (my_mac(47-r.count*8 downto 40-r.count*8) /= RxD_0) and 
+            ((RxD_0 /= x"ff") or (r.not_broadcast = '1')) then
+              -- Not our address and not a broadcast either, so go to IDLE
               r_n.state <= ST_RCV_WAIT_IDLE;
-            end if;
           elsif r.count < 5 then
             r_n.count <= r.count + 1;
           else
