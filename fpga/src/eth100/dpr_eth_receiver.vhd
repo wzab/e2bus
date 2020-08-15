@@ -7,7 +7,7 @@
 -- License    : Dual LGPL/BSD License
 -- Company    : 
 -- Created    : 2014-11-10
--- Last update: 2019-07-04
+-- Last update: 2020-08-15
 -- Platform   : 
 -- Standard   : VHDL'93
 -------------------------------------------------------------------------------
@@ -125,6 +125,7 @@ architecture beh1 of eth_receiver is
     ack_byte0       : std_logic_vector(7 downto 0);
     ack_byte1       : std_logic_vector(7 downto 0);
     ack_byte2       : std_logic_vector(7 downto 0);
+    not_broadcast   : std_logic;
     frnum_is_bigger : std_logic;
     update_flag     : std_logic;
     ready           : std_logic;
@@ -150,6 +151,7 @@ architecture beh1 of eth_receiver is
     ack_byte0       => (others => '0'),
     ack_byte1       => (others => '0'),
     ack_byte2       => (others => '0'),
+    not_broadcast   => '0',
     frnum_is_bigger => '0',
     update_flag     => '0',
     ready           => '0',
@@ -376,6 +378,7 @@ begin  -- beh1
           r_n.count           <= 0;
           -- Here we add filtering of packets to other destinations
           -- r_n.state     <= ST_RCV_PACKET_1;
+          r_n.not_broadcast   <= '0';
           r_n.state           <= ST_RCV_DEST;
           -- The lines below ensure proper recovery of buffer space in case
           -- if previously a corrupted packet was received.
@@ -389,15 +392,21 @@ begin  -- beh1
         -- dbg <= 0010
         if Rx_Dv_0 = '1' then
           r_n.crc32 <= newcrc32_d8(RxD_0, r.crc32);
+          if RxD_0 /= x"ff" then
+            r_n.not_broadcast <= '1';
+          end if;
           if my_mac(47-r.count*8 downto 40-r.count*8) /= RxD_0 then
-            -- Not our address, return to IDLE!
-            r_n.state <= ST_RCV_WAIT_IDLE;
+            -- Not our address, but it may be broadcast
+            if (RxD_0 /= x"ff") or (r.not_broadcast = '1') then
+              -- It is not a broadcast either, so go to IDLE
+              r_n.state <= ST_RCV_WAIT_IDLE;
+            end if;
           elsif r.count < 5 then
             r_n.count <= r.count + 1;
           else
             r_n.count <= 0;
             r_n.state <= ST_RCV_SOURCE;
-          -- Our address! Receive the sender
+          -- Our address or broadcast! Receive the sender
           end if;
         else
           -- packet broken?
@@ -406,6 +415,9 @@ begin  -- beh1
           end if;
         end if;
       when ST_RCV_SOURCE =>
+        -- We go to ST_RCV_SOURCE state with r.not_broadcast = '0', if we receive
+        -- the broadcast packet, or with r.not_broadcast = '1', if we receive
+        -- the packet destined to our address.
         --dbg <= "0011";
         if Rx_Dv_0 = '1' then
           r_n.crc32                                    <= newcrc32_d8(RxD_0, r.crc32);
@@ -449,12 +461,16 @@ begin  -- beh1
       when ST_RCV_PACKET_0 =>
         if Rx_Dv_0 = '1' then
           r_n.crc32 <= newcrc32_d8(RxD_0, r.crc32);
-          if RxD_0(7) = '1' then
+          -- Only special commands are serviced both for normal and broadcast package
+          if RxD_0 = x"5b" then
+            r_n.state <= ST_RCV_SPECIAL_CMD_1;
+          elsif r.not_broadcast = '0' then
+            -- Other commands are handled only if it is not a broadcast package
+            r_n.state <= ST_RCV_IDLE;
+          elsif RxD_0(7) = '1' then
             -- This is response acknowledgement
             r_n.ack_byte0 <= RxD_0;
             r_n.state     <= ST_RCV_ACK0;
-          elsif RxD_0 = x"5b" then
-            r_n.state <= ST_RCV_SPECIAL_CMD_1;
           elsif RxD_0 = x"5a" then
             r_n.count    <= 0;
             r_n.state    <= ST_RCV_PACKET_1;
