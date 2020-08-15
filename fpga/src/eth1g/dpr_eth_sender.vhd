@@ -7,7 +7,7 @@
 -- License    : Dual LGPL/BSD License
 -- Company    : 
 -- Created    : 2014-11-10
--- Last update: 2019-07-04
+-- Last update: 2020-08-16
 -- Platform   : 
 -- Standard   : VHDL'93
 -------------------------------------------------------------------------------
@@ -58,11 +58,13 @@ entity eth_sender is
     snd_resp_end           : in  std_logic_vector(C_RESP_ABITS-1 downto 0);
     snd_resp_req           : in  std_logic;
     snd_resp_ack           : out std_logic;
+    -- QUERY REQUEST interface
+    snd_query_req          : in  std_logic;
     -- Additional info about the transmitted response
     -- Lower 8-bits of frame number
-    snd_cmd_frm_num       : in  std_logic_vector(7 downto 0);
+    snd_cmd_frm_num        : in  std_logic_vector(7 downto 0);
     -- Time of sending of the response
-    snd_resp_time         : in std_logic_vector(15 downto 0);
+    snd_resp_time          : in  std_logic_vector(15 downto 0);
     -- TX Phy interface
     Tx_Clk                 : in  std_logic;
     Tx_En                  : out std_logic;
@@ -78,11 +80,11 @@ architecture beh1 of eth_sender is
   constant DPR_AWDTH : integer := 12;
 
   type T_ETH_SENDER_STATE is (WST_IDLE, WST_SEND_PREAMB, WST_SEND_SOF,
-                              WST_SEND_PACKET_0,WST_SEND_PACKET_0b,
-                              WST_SEND_PACKET_0c,WST_SEND_PACKET_0d,
+                              WST_SEND_PACKET_0, WST_SEND_PACKET_0b,
+                              WST_SEND_PACKET_0c, WST_SEND_PACKET_0d,
                               WST_SEND_PACKET_1, WST_SEND_PACKET_2,
                               WST_SEND_MY_MAC_0, WST_SEND_PEER_MAC_0,
-                              WST_SEND_PROTO_0,
+                              WST_SEND_PROTO_0, WST_SEND_QUERY,
                               WST_SEND_ACKS, WST_SEND_IRQS, WST_SELECT_PART,
                               WST_ADD_TRAILER,
                               WST_SEND_CRC,
@@ -96,33 +98,36 @@ architecture beh1 of eth_sender is
   signal TxD_0    : std_logic_vector(7 downto 0);
 
   signal snd_resp_req_sync : std_logic;
+  signal snd_query_sync    : std_logic;
   signal is_irq_to_service : boolean := false;
-  
+
   type T_ETH_SENDER_REGS is record
-    state        : T_ETH_SENDER_STATE;
-    snd_resp_ack : std_logic;
+    state         : T_ETH_SENDER_STATE;
+    snd_resp_ack  : std_logic;
+    snd_query_ack : std_logic;
     --ready   : std_logic;
-    tmp          : std_logic_vector(7 downto 0);
-    count        : integer;
-    pkt_len      : integer;
-    rd_ptr       : unsigned(C_RESP_ABITS-1 downto 0);
-    byte         : integer;
-    crc32        : std_logic_vector(31 downto 0);
-    irq_throttle : integer;
+    tmp           : std_logic_vector(7 downto 0);
+    count         : integer;
+    pkt_len       : integer;
+    rd_ptr        : unsigned(C_RESP_ABITS-1 downto 0);
+    byte          : integer;
+    crc32         : std_logic_vector(31 downto 0);
+    irq_throttle  : integer;
   end record;
 
 
   constant ETH_SENDER_REGS_INI : T_ETH_SENDER_REGS := (
-    state        => WST_IDLE,
+    state         => WST_IDLE,
     --ready   => '1',
-    tmp          => (others => '0'),
-    snd_resp_ack => '0',
-    count        => 0,
-    pkt_len      => 0,
-    rd_ptr       => (others => '0'),
-    byte         => 0,
-    crc32        => (others => '0'),
-    irq_throttle => 0
+    tmp           => (others => '0'),
+    snd_resp_ack  => '0',
+    snd_query_ack => '0',
+    count         => 0,
+    pkt_len       => 0,
+    rd_ptr        => (others => '0'),
+    byte          => 0,
+    crc32         => (others => '0'),
+    irq_throttle  => 0
     );
 
   signal r, r_n : T_ETH_SENDER_REGS := ETH_SENDER_REGS_INI;
@@ -203,9 +208,11 @@ begin  -- beh1
       Tx_En             <= '0';
       TxD_0             <= (others => '0');
       Tx_En_0           <= '0';
+      snd_query_sync    <= '0';
       snd_resp_req_sync <= '0';
     elsif Tx_Clk'event and Tx_Clk = '1' then  -- rising clock edge
       r                 <= r_n;
+      snd_query_sync    <= snd_query_req;
       snd_resp_req_sync <= snd_resp_req;
       -- To minimize glitches and propagation delay, let's add pipeline register
       Tx_En_0           <= c.Tx_En;
@@ -217,11 +224,11 @@ begin  -- beh1
 
   snd2 : process (irqs, is_irq_to_service, my_mac, peer_mac, r,
                   snd_cmd_ack_fifo_din, snd_cmd_ack_fifo_empty,
-                  snd_cmd_frm_num, snd_resp_dpr_din, snd_resp_end,
-                  snd_resp_req_sync, snd_resp_start,
+                  snd_cmd_frm_num, snd_query_sync, snd_resp_dpr_din,
+                  snd_resp_end, snd_resp_req_sync, snd_resp_start,
                   snd_resp_time)
-    variable v_TxD : std_logic_vector(7 downto 0);
-	 variable bit_sel : integer;
+    variable v_TxD   : std_logic_vector(7 downto 0);
+    variable bit_sel : integer;
   begin  -- process snd1
     -- default values
     c   <= ETH_SENDER_COMB_DEFAULT;
@@ -240,7 +247,8 @@ begin  -- beh1
         --r_n.ready <= '1';
         if (snd_cmd_ack_fifo_empty = '0') or
           (snd_resp_req_sync /= r.snd_resp_ack) or
-            is_irq_to_service then
+          (snd_query_sync /= r.snd_query_ack) or
+          is_irq_to_service then
           -- We have a packet to transmit!
           --r_n.ready <= '0';
           r_n.state <= WST_SEND_PREAMB;
@@ -264,7 +272,7 @@ begin  -- beh1
       when WST_SEND_PEER_MAC_0 =>
         -- Here we send the header and we decide whether we send the
         -- acknowledgements only or also the response
-		  bit_sel := (r.count-1)*8;
+        bit_sel     := (r.count-1)*8;
         v_TxD       := peer_mac((bit_sel + 7) downto bit_sel);
         c.TxD       <= v_TxD;
         c.Tx_En     <= '1';
@@ -279,7 +287,7 @@ begin  -- beh1
       when WST_SEND_MY_MAC_0 =>
         -- Here we send the header and we decide whether we send the
         -- acknowledgements only or also the response
-		  bit_sel := (r.count-1)*8;
+        bit_sel     := (r.count-1)*8;
         v_TxD       := my_mac((bit_sel+7) downto bit_sel);
         c.TxD       <= v_TxD;
         c.Tx_En     <= '1';
@@ -294,7 +302,7 @@ begin  -- beh1
       when WST_SEND_PROTO_0 =>
         -- Here we send the header and we decide whether we send the
         -- acknowledgements only or also the response
-  		  bit_sel := (r.count-1)*8;
+        bit_sel     := (r.count-1)*8;
         v_TxD       := proto_id((bit_sel+7) downto bit_sel);
         c.TxD       <= v_TxD;
         c.Tx_En     <= '1';
@@ -315,8 +323,11 @@ begin  -- beh1
         r_n.pkt_len <= r.pkt_len + 1;
         r_n.crc32   <= newcrc32_d8(v_TxD, r.crc32);
         -- Now we check possible actions
+        -- Do we need to send a QUERY response?
+        if snd_query_sync /= r.snd_query_ack then
+          r_n.state <= WST_SEND_QUERY;
         -- Do we need to send an IRQ notification?
-        if is_irq_to_service then
+        elsif is_irq_to_service then
           r_n.state        <= WST_SEND_IRQS;
           -- We set the "irq_throttle" to the negative value.
           -- That ensures that counter starts counting down only after
@@ -333,6 +344,17 @@ begin  -- beh1
           -- If necessary, pad the packet until it has correct length
           r_n.state <= WST_ADD_TRAILER;
         end if;
+      when WST_SEND_QUERY =>
+        -- Here we send certain information, and finally we send trailer
+        v_TxD             := x"71";
+        c.TxD             <= v_TxD;
+        c.Tx_En           <= '1';
+        r_n.pkt_len       <= r.pkt_len + 1;
+        r_n.crc32         <= newcrc32_d8(v_TxD, r.crc32);
+        -- Mark query as sent
+        r_n.snd_query_ack <= snd_query_sync;
+        -- If necessary, pad the packet until it has correct length
+        r_n.state         <= WST_ADD_TRAILER;
       when WST_SEND_IRQS =>
         v_TxD       := x"59";           -- Marker of IRQ status
         c.TxD       <= v_TxD;
@@ -438,7 +460,7 @@ begin  -- beh1
         if r.byte < 3 then
           r_n.byte <= r.byte + 1;
         else
-          r_n.count <= 2200;              -- generate the IFG - 12 bytes = 96
+          r_n.count <= 2200;            -- generate the IFG - 12 bytes = 96
           -- bits
           r_n.state <= WST_SEND_COMPLETED;
         end if;

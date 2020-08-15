@@ -6,7 +6,7 @@
 -- Author     : FPGA Developer  <xl@wzab.nasz.dom>
 -- Company    : 
 -- Created    : 2018-03-15
--- Last update: 2019-07-26
+-- Last update: 2020-08-16
 -- Platform   : 
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -132,6 +132,7 @@ architecture beh_rtl of e2bus is
   signal retr_threshold     : unsigned(15 downto 0) := (3      => '1', others => '0');
 
   signal snd_resp_ack_sync : std_logic := '0';
+  signal snd_query_req     : std_logic := '0';
 
   signal rcv_ready_nsync, rcv_ready, rcv_ready_0 : std_logic := '0';
 
@@ -325,6 +326,7 @@ begin  -- architecture beh_rtl
       snd_resp_end           => snd_resp_end,
       snd_resp_req           => snd_resp_req,
       snd_resp_ack           => snd_resp_ack,
+      snd_query_req          => snd_query_req,
       snd_cmd_frm_num        => snd_cmd_frm_num,
       snd_resp_time          => snd_resp_time,
       -- MAC Interface
@@ -477,6 +479,7 @@ begin  -- architecture beh_rtl
       if sys_clk'event and sys_clk = '1' then  -- rising clock edge
         if rst_p = '1' then             -- synchronous reset (active high)
           special_cmd_req_sync <= '0';
+          snd_query_req        <= '0';
           rst_e2b_p            <= '1';
           special_cmd_ack      <= '0';
           sc_state             <= SC_INIT;
@@ -496,6 +499,7 @@ begin  -- architecture beh_rtl
                     peer_mac        <= received_peer_mac;
                     rst_e2b_p       <= '1';
                     special_cmd_ack <= '1';
+                    snd_query_req   <= '0';  -- Because the transmitter gets reset!
                     count           <= 10;
                     sc_state        <= SC_KEEP_RESET;
                   when 2 =>
@@ -504,6 +508,11 @@ begin  -- architecture beh_rtl
                   when 3 =>
                     -- Report status command
                     null;
+                  when 4 =>
+                    -- Query command - toggle request to trigger sending response
+                    snd_query_req   <= not snd_query_req;
+                    special_cmd_ack <= '1';
+                    sc_state        <= SC_WAIT_REQ;
                   when others => null;
                 end case;
               end if;
@@ -521,7 +530,8 @@ begin  -- architecture beh_rtl
                 count <= count - 1;
               else
                 if special_cmd_req_sync = '0' then
-                  sc_state <= SC_IDLE;
+                  special_cmd_ack <= '0';
+                  sc_state        <= SC_IDLE;
                 end if;
               end if;
             when others => null;
