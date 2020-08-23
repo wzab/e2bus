@@ -6,7 +6,7 @@
 -- Author     : FPGA Developer  <xl@wzab.nasz.dom>
 -- Company    : 
 -- Created    : 2018-03-15
--- Last update: 2020-08-16
+-- Last update: 2020-08-23
 -- Platform   : 
 -- Standard   : VHDL'93/02
 -------------------------------------------------------------------------------
@@ -494,6 +494,11 @@ begin  -- architecture beh_rtl
               if special_cmd_req_sync = '1' then
                 -- Check the command
                 case to_integer(unsigned(special_cmd)) is
+                  when 0 =>
+                    -- Query command - toggle request to trigger sending response
+                    snd_query_req   <= not snd_query_req;
+                    special_cmd_ack <= '1';
+                    sc_state        <= SC_WAIT_REQ;
                   when 1 =>
                     -- Reset and set MAC command
                     peer_mac        <= received_peer_mac;
@@ -508,11 +513,6 @@ begin  -- architecture beh_rtl
                   when 3 =>
                     -- Report status command
                     null;
-                  when 4 =>
-                    -- Query command - toggle request to trigger sending response
-                    snd_query_req   <= not snd_query_req;
-                    special_cmd_ack <= '1';
-                    sc_state        <= SC_WAIT_REQ;
                   when others => null;
                 end case;
               end if;
