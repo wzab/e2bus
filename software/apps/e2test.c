@@ -36,10 +36,20 @@
 
 struct e2b_v1_device_connection dc = {
     //.ifname = "eth0",
-    .ifname = "enx00e04c680185",
-    //.ifname = "enp3s0f1",
+    //.ifname = "enx00e04c680185",
+    .ifname = "enp2s0",
     .dest_mac = "\x0e\x68\x61\x2d\xd4\x7e",
 };
+
+struct e2b_v1_device_connection query = {
+    //.ifname = "eth0",
+    //.ifname = "enx00e04c680185",
+    .ifname = "enp2s0",
+    .dest_mac = "\xff\xff\xff\xff\xff\xff",
+};
+
+struct e2b_v1_query_resp qr;
+
 struct e2b_v1_packet_to_send pts;
 
 int main(int argc, char **argv)
@@ -119,6 +129,20 @@ int main(int argc, char **argv)
     //Test ioctl
     res = ioctl(fo,E2B_IOC_TEST,NULL);
     //return 0;
+    //Query for devices
+    res = ioctl(fo,E2B_IOC_SEND_QUERY, &query);
+    usleep(500000);
+    while(1) {
+		int i;
+		res = ioctl(fo,E2B_IOC_GET_QUERY, &qr);
+		if(res == 0) break;
+		printf("%s %2.2x:%2.2x:%2.2x:%2.2x:%2.2x:%2.2x\n",qr.ifname,(int)qr.mac[0],(int)qr.mac[1],(int)qr.mac[2],(int)qr.mac[3],(int)qr.mac[4],(int)qr.mac[5]);
+		printf("Payload:");
+		for(i=0;i<qr.len;i++) {
+			printf("%2.2x,",(int) qr.buf[i]);
+		}
+		printf("\n\n");
+	}
     //Connect to the device
     res = ioctl(fo,E2B_IOC_OPEN,&dc);
     usleep(500000);
