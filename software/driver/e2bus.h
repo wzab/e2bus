@@ -44,6 +44,13 @@ struct e2b_v1_device_connection {
 #define E2B_MAX_PKTLEN 1536
 #define E2B_MIN_PKTLEN 100
 
+struct e2b_v1_query_resp {
+    char ifname[IFNAMSIZ];
+    unsigned char mac[ETH_ALEN];
+    int len;
+    unsigned char buf[E2B_MAX_PKTLEN];
+} __attribute__ ((__packed__));
+
 //Value used to fill the packet after the cmd frame
 #define E2B_PACKET_FILL 0x51
 
@@ -61,6 +68,8 @@ struct e2b_v1_device_connection {
 #define E2B_IOC_CLOSE   _IO(E2B_V1_IOC_MAGIC,0x34)
 #define E2B_IOC_TEST   _IO(E2B_V1_IOC_MAGIC,0x35)
 #define E2B_IOC_WAIT_IRQ   _IO(E2B_V1_IOC_MAGIC,0x36)
+#define E2B_IOC_SEND_QUERY   _IOR(E2B_V1_IOC_MAGIC,0x37,struct e2b_v1_device_connection)
+#define E2B_IOC_GET_QUERY   _IOW(E2B_V1_IOC_MAGIC,0x38,struct e2b_v1_query_resp)
 //#define E2B_V1_IOC_READPTRS   _IOR(E2B_V1_IOC_MAGIC,0x32,struct E2B_v1_buf_pointers)
 //#define E2B_V1_IOC_WRITEPTRS      _IO(E2B_V1_IOC_MAGIC,0x33)
 //#define E2B_V1_IOC_GETMAC        _IOW(E2B_V1_IOC_MAGIC,0x34,struct E2B_v1_slave)

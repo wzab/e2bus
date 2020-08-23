@@ -31,6 +31,7 @@
 #include <linux/device.h>
 #include <linux/fs.h>
 #include <linux/init.h>
+#include <linux/list.h>
 #include <linux/netdevice.h>
 #include <linux/uaccess.h>
 #include <linux/vmalloc.h>
@@ -118,6 +119,21 @@ typedef struct {
     struct hrtimer send_timer;
 } slave_data;
 
+/*
+ * Structure used to hold the QUERY responses (they are collected from
+ * QUERY response packages and stored until the user application
+ * receives them via ioctl
+ */
+
+typedef struct {
+    uint8_t mac[6];
+    unsigned char ifname[IFNAMSIZ];
+    unsigned char * buf;
+    int len;
+    struct list_head node;
+} query_resp;
+
+LIST_HEAD(query_resp_list);
 
 static int e2b_proto_rcv(struct sk_buff *skb, struct net_device *dev,
                          struct packet_type *pt, struct net_device *orig_dev);
@@ -347,6 +363,7 @@ static int e2b_proto_rcv(struct sk_buff *skb, struct net_device *dev,
     int send_pkt = 0;
     int slot;
     int ns;
+    int ver;
     int bc; //byte counter
     rcv_hdr = eth_hdr(skb);
     pkt_len = skb->len;
@@ -357,7 +374,51 @@ static int e2b_proto_rcv(struct sk_buff *skb, struct net_device *dev,
         pr_alert("@");
         return NET_RX_DROP;
     }
-    // First we try to identify the sender so we search the table of active slaves
+    // Because we need to handle the responses to QUERY commands, we must copy the
+    // packet before filtering slaves.
+    //We do not use jumbo frames, so it may be acceptable to copy the whole packet to the buffer...
+    //Check the length
+    if(pkt_len > E2B_MAX_PKTLEN) {
+        //Should we report it somehow?
+        kfree_skb(skb);
+        return NET_RX_DROP  ;
+    }
+    //Allocate the temporary buffer for the packet
+    tmp_buf = kmalloc(pkt_len, GFP_ATOMIC);
+    if(tmp_buf == NULL) {
+        goto error_drop;
+    }
+    //We copy the packet to avoid problems caused by its fragmentation
+    //(if it is needed... maybe we can do it conditionally?)
+    skb_copy_bits(skb,0,tmp_buf,pkt_len);
+    //Check the version of the protocol
+    bc=0;
+    ver = tmp_buf[bc++];
+    ver = 256 * ver + tmp_buf[bc++];
+    if(ver != E2B_PROTO_VER) {
+        pr_warn("Wrong version of the protocol\n");
+        goto error_drop;
+    }
+    // Before we check if this is a command addressed to the particular slave,
+    // we should detect the response to the QUERY command (it may be sent by
+    // "unsolicited slaves")
+    if(tmp_buf[bc] == 'q') {
+        //This is a response to the QUERY command, so it must be handled in a special way.
+        //We simply add the object containing the MAC, the length of the payload
+        //and the pointer to the payload to the list
+        query_resp * qr_ptr = kmalloc(sizeof(query_resp), GFP_ATOMIC);
+        if (qr_ptr == NULL) {
+            goto error_drop;
+        }
+        memcpy(qr_ptr->mac,rcv_hdr->h_source,6);
+        memcpy(qr_ptr->ifname,dev->name,IFNAMSIZ);
+        qr_ptr->buf = tmp_buf;
+        qr_ptr->len = pkt_len;
+        tmp_buf = NULL; //Ensure that tmp_buf won't be freed
+        list_add_tail(&qr_ptr->node,&query_resp_list);
+        goto exit_success;
+    }
+    // Now we check if the sender is in the list of of active slaves
     // When we receive the packet, we don't know with which slave it is associated
     // Therefore we need to find the right slave. (to be copied from FADE)
     read_lock_bh(&slave_table_lock);
@@ -382,25 +443,9 @@ static int e2b_proto_rcv(struct sk_buff *skb, struct net_device *dev,
         return NET_RX_DROP;
     }
     sl = &slave_table[ns]; //To speed up access to the data describing state of the slave
-    //We do not use jumbo frames, so it may be acceptable to copy the whole packet to the buffer...
-    //Check the length
-    if(pkt_len > E2B_MAX_PKTLEN) {
-        //Should we report it somehow?
-        kfree_skb(skb);
-        return NET_RX_DROP  ;
-    }
-    //Allocate the temporary buffer for the packet
-    tmp_buf = kmalloc(pkt_len, GFP_ATOMIC);
-    if(tmp_buf == NULL) {
-        goto error_drop;
-    }
-    //We copy the packet to avoid problems caused by its fragmentation
-    //(if it is needed... maybe we can do it conditionally?)
-    skb_copy_bits(skb,0,tmp_buf,pkt_len);
     //OK. The packet is copied, now we can free it and parse the copied contents.
     kfree_skb(skb);
     skb=NULL;
-    bc=0;
     while(bc<pkt_len) {
         unsigned char c1 = tmp_buf[bc++];
         if (c1 & 0x80) {
@@ -669,7 +714,7 @@ static void send_spec_cmd(struct net_device * netdev, int cmd, unsigned char * s
     *(my_data++) = (E2B_PROTO_VER >> 8) & 0xff;
     *(my_data++) = (E2B_PROTO_VER & 0xff);
     *(my_data++) = 0x5b;
-    *(my_data++) = 0x1;
+    *(my_data++) = cmd;
     // If the packet is too short, add the trailer
     if(newskb->len < E2B_MIN_PKTLEN) {
         int trailer_length = E2B_MIN_PKTLEN - newskb->len;
@@ -682,6 +727,7 @@ static void send_spec_cmd(struct net_device * netdev, int cmd, unsigned char * s
     }
     dev_queue_xmit(newskb);
 }
+
 static int e2b_release(struct inode *inode, struct file *file)
 {
     //We should stop the communication
@@ -861,6 +907,60 @@ long e2b_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         dev_alert(sd->dev,"Alert z dev z IOC_TEST");
 #endif
         return SUCCESS;
+    }
+    case E2B_IOC_SEND_QUERY: {
+        // This ioctl sends the QUERY requests via a specified
+        // network interface.
+        int res2;
+        struct net_device *netdev;
+        void *src = (void *)arg;
+        struct e2b_v1_device_connection dc;
+        if (!access_ok(src, sizeof(dc))) {
+            dev_alert(sd->dev,"Wrong permissions in E2B_IOC_SEND_QUERY");
+            return -EFAULT;
+        } else {
+            res2 = __copy_from_user(&dc, src, sizeof(dc));
+            if (res2) {
+                dev_alert(sd->dev,"Couldn't copy dc in E2B_IOC_SEND_QUERY");
+                return -EFAULT;
+            }
+        }
+        netdev = dev_get_by_name(&init_net, dc.ifname);
+        if (!netdev) {
+            dev_alert(sd->dev,"Couldn't get network device:%s in E2B_IOC_SEND_QUERY",dc.ifname);
+            return -ENODEV;
+        }
+        send_spec_cmd(netdev,0,dc.dest_mac);
+        dev_put(netdev);
+        return SUCCESS;
+    }
+    case E2B_IOC_GET_QUERY: {
+        struct e2b_v1_query_resp * res_p;
+        query_resp * qr_p;
+        int len, res2;
+        res_p = (void *) arg;
+        if (!access_ok(res_p, sizeof(struct e2b_v1_query_resp))) {
+            dev_alert(sd->dev,"Wrong permissions in E2B_IOC_GET_QUERY");
+            return -EFAULT;
+        }
+        qr_p = list_first_entry_or_null(&query_resp_list, query_resp, node);
+        if (qr_p == NULL) {
+            return 0;
+        }
+        len = qr_p->len;
+        list_del_init(&qr_p->node);
+        res2 = __copy_to_user(&res_p->mac,&qr_p->mac,sizeof(qr_p->mac)) ||
+               __copy_to_user(&res_p->buf,qr_p->buf,qr_p->len) || //qr_p->buf is a pointer!
+               __copy_to_user(&res_p->ifname,&qr_p->ifname,sizeof(qr_p->ifname)) ||
+               __copy_to_user(&res_p->len,&qr_p->len,sizeof(qr_p->len));
+        // Now free the kernel space buffers
+        kfree(qr_p->buf);
+        kfree(qr_p);
+        if (res2) {
+            dev_alert(sd->dev,"Couldn't copy result in E2B_IOC_GET_QUERY");
+            return -EFAULT;
+        }
+        return len;
     }
     case E2B_IOC_OPEN: {
         // Here we should set the connection to the particular device. Therefore we
@@ -1245,6 +1345,15 @@ static void e2b_cleanup(void)
         dev_remove_pack(&e2b_proto_pt);
         proto_registered = 0;
     };
+    /* Clean the list of query responses */
+    while(1) {
+        query_resp * qr_p;
+        qr_p = list_first_entry_or_null(&query_resp_list, query_resp, node);
+        if (qr_p == NULL) break;
+        list_del_init(&qr_p->node);
+        kfree(qr_p->buf);
+        kfree(qr_p);
+    }
     if(slave_table) {
         for(i=0; i<max_slaves; i++) {
             //Deinitialize slave
