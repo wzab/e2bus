@@ -145,8 +145,8 @@ set_location_assignment PIN_H6 -to switches[2]
 set_location_assignment PIN_L9 -to switches[1]
 set_location_assignment PIN_L10 -to switches[0]
 set_location_assignment PIN_V11 -to sysclk
-set_location_assignment PIN_Y15 -to i2c_scl
-set_location_assignment PIN_AG28 -to i2c_sda
+set_location_assignment PIN_AF22 -to i2c_scl
+set_location_assignment PIN_AH22 -to i2c_sda
 set_global_assignment -name ENABLE_SIGNALTAP ON
 set_global_assignment -name USE_SIGNALTAP_FILE stp1.stp
 set_global_assignment -name SLD_NODE_CREATOR_ID 110 -section_id auto_signaltap_0
