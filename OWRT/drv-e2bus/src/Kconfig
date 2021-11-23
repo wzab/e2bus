@@ -1,0 +1,4 @@
+config DRV_E2BUS
+	tristate "Driver for E2Bus"
+	help
+	  Driver for E2Bus protocol

@@ -1,0 +1,1 @@
+obj-${CONFIG_DRV_E2BUS}	+= e2bus.o
