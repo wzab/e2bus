@@ -17,6 +17,10 @@ define Package/$(PKG_NAME)/description
   Tu mogę stworzyć jakiś opis
 endef
 
+define Build/Prepare
+	cp -rfL src/* $(PKG_BUILD_DIR)
+endef
+
 define Build/Configure
 endef
 

@@ -2,41 +2,38 @@ include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/kernel.mk
 
 PKG_NAME:=drv-e2bus
+PKG_VERSION:=0.1
 PKG_RELEASE:=1
+
+#PKG_BUILD_DIR:=$(KERNEL_BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
 
 include $(INCLUDE_DIR)/package.mk
 
-define KernelPackage/$(PKG_NAME)
+define KernelPackage/drv-e2bus
   SUBMENU:=Experimental
   TITLE:=E2Bus driver
   FILES:=$(PKG_BUILD_DIR)/e2bus.ko
-  KCONFIG:=  
 endef
 
-define KernelPackage/$(PKG_NAME)/description
+define KernelPackage/drv-e2bus/description
   Experimental timer TIM1 connected to sysbus.
   For SCZR lab.
 endef
 
-EXTRA_KCONFIG:= \
-	CONFIG_DRV_E2BUS=m
-
-EXTRA_CFLAGS:= \
-        -std=gnu99 -Wno-declaration-after-statement \
-	$(patsubst CONFIG_%, -DCONFIG_%=1, $(patsubst %=m,%,$(filter %=m,$(EXTRA_KCONFIG)))) \
-	$(patsubst CONFIG_%, -DCONFIG_%=1, $(patsubst %=y,%,$(filter %=y,$(EXTRA_KCONFIG)))) \
-
 MAKE_OPTS:= \
-	$(KERNEL_MAKE_FLAGS) \
 	ARCH="$(LINUX_KARCH)" \
 	CROSS_COMPILE="$(TARGET_CROSS)" \
-	SUBDIRS="$(PKG_BUILD_DIR)" \
-	EXTRA_CFLAGS="$(EXTRA_CFLAGS)" \
-	$(EXTRA_KCONFIG)
+	EXTRA_CFLAGS="-std=gnu99 -Wno-declaration-after-statement" \
+	M="$(PKG_BUILD_DIR)"
+
+define Build/Prepare
+	cp src/* $(PKG_BUILD_DIR)
+endef
 
 define Build/Compile
-	$(MAKE) -C "$(LINUX_DIR)" \
+	+$(MAKE) -C "$(LINUX_DIR)" \
 		$(MAKE_OPTS) \
+		CONFIG_DRV_E2BUS=m \
 		modules
 endef
 
@@ -45,5 +42,5 @@ define Build/InstallDev
 	$(CP) src/*.h $(1)/usr/include
 endef
 
-$(eval $(call KernelPackage,$(PKG_NAME)))
+$(eval $(call KernelPackage,drv-e2bus))
 

@@ -9,12 +9,16 @@ include $(INCLUDE_DIR)/package.mk
 define Package/$(PKG_NAME)
   SECTION:=WZab
   CATEGORY:=Examples
-  DEPENDS:=+kmod-drv-e2bus
+  DEPENDS:=+kmod-drv-e2bus +libzmq
   TITLE:=E2Bus gateway
 endef
 
 define Package/$(PKG_NAME)/description
   Tu mogę stworzyć jakiś opis
+endef
+
+define Build/Prepare
+    cp -rfL src/* $(PKG_BUILD_DIR)
 endef
 
 define Build/Configure
